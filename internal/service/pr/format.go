@@ -48,6 +48,13 @@ func (info *Info) Format() string {
 	}
 	b.WriteString(fmt.Sprintf("Issues: %s  \n", strings.Join(issueStrs, ", ")))
 
+	// conversation
+	commentWord := "comments"
+	if info.CommentCount == 1 {
+		commentWord = "comment"
+	}
+	b.WriteString(fmt.Sprintf("\nConversation: %d %s\n", info.CommentCount, commentWord))
+
 	// description
 	b.WriteString("\n---\n\n")
 	body := strings.TrimSpace(info.Body)

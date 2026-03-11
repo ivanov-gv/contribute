@@ -21,23 +21,24 @@ func NewService(gql *gh.GraphQLClient, owner, repo string) *Service {
 
 // Info holds rich PR details from GraphQL
 type Info struct {
-	Number      int
-	Title       string
-	State       string
-	IsDraft     bool
-	Mergeable   string
-	Body        string
-	URL         string
-	Head        string
-	Base        string
-	Author      string
-	CommitCount int
-	Reviewers   []string
-	Assignees   []string
-	Labels      []string
-	Projects    []string
-	Milestone   string
-	Issues      []LinkedIssue
+	Number       int
+	Title        string
+	State        string
+	IsDraft      bool
+	Mergeable    string
+	Body         string
+	URL          string
+	Head         string
+	Base         string
+	Author       string
+	CommitCount  int
+	CommentCount int
+	Reviewers    []string
+	Assignees    []string
+	Labels       []string
+	Projects     []string
+	Milestone    string
+	Issues       []LinkedIssue
 }
 
 // LinkedIssue is an issue referenced by the PR
@@ -69,6 +70,12 @@ type prNode struct {
 	Commits struct {
 		TotalCount int `json:"totalCount"`
 	} `json:"commits"`
+	Comments struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"comments"`
+	Reviews struct {
+		TotalCount int `json:"totalCount"`
+	} `json:"reviews"`
 	Assignees struct {
 		Nodes []struct {
 			Login string `json:"login"`
@@ -114,6 +121,8 @@ query($owner: String!, $repo: String!, $number: Int!) {
       headRefName baseRefName
       author { login }
       commits { totalCount }
+      comments { totalCount }
+      reviews { totalCount }
       assignees(first: 20) { nodes { login } }
       labels(first: 20) { nodes { name } }
       reviewRequests(first: 20) {
@@ -181,17 +190,18 @@ func (s *Service) FindByBranch(branch string) (int, error) {
 // mapPR converts the GraphQL response to our Info type
 func mapPR(n *prNode) *Info {
 	info := &Info{
-		Number:      n.Number,
-		Title:       n.Title,
-		State:       strings.ToLower(n.State),
-		IsDraft:     n.IsDraft,
-		Mergeable:   n.Mergeable,
-		Body:        n.Body,
-		URL:         n.URL,
-		Head:        n.HeadRefName,
-		Base:        n.BaseRefName,
-		Author:      n.Author.Login,
-		CommitCount: n.Commits.TotalCount,
+		Number:       n.Number,
+		Title:        n.Title,
+		State:        strings.ToLower(n.State),
+		IsDraft:      n.IsDraft,
+		Mergeable:    n.Mergeable,
+		Body:         n.Body,
+		URL:          n.URL,
+		Head:         n.HeadRefName,
+		Base:         n.BaseRefName,
+		Author:       n.Author.Login,
+		CommitCount:  n.Commits.TotalCount,
+		CommentCount: n.Comments.TotalCount + n.Reviews.TotalCount,
 	}
 
 	// reviewers

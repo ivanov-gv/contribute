@@ -70,9 +70,6 @@ type commentsQuery struct {
 			Reviews struct {
 				Nodes []reviewNode `json:"nodes"`
 			} `json:"reviews"`
-			ReviewThreads struct {
-				Nodes []reviewThreadNode `json:"nodes"`
-			} `json:"reviewThreads"`
 		} `json:"pullRequest"`
 	} `json:"repository"`
 }
@@ -97,21 +94,14 @@ type reviewNode struct {
 	CreatedAt  string `json:"createdAt"`
 	Comments   struct {
 		TotalCount int `json:"totalCount"`
+		Nodes      []struct {
+			IsMinimized     bool   `json:"isMinimized"`
+			MinimizedReason string `json:"minimizedReason"`
+		} `json:"nodes"`
 	} `json:"comments"`
 	Reactions struct {
 		Nodes []reactionNode `json:"nodes"`
 	} `json:"reactions"`
-}
-
-type reviewThreadNode struct {
-	IsResolved bool `json:"isResolved"`
-	Comments   struct {
-		Nodes []struct {
-			PullRequestReview *struct {
-				DatabaseID int64 `json:"databaseId"`
-			} `json:"pullRequestReview"`
-		} `json:"nodes"`
-	} `json:"comments"`
 }
 
 type author struct {
@@ -144,19 +134,12 @@ query($owner: String!, $repo: String!, $number: Int!) {
           databaseId
           author { login }
           body state createdAt
-          comments { totalCount }
+          comments(first: 100) {
+            totalCount
+            nodes { isMinimized minimizedReason }
+          }
           reactions(first: 100) {
             nodes { content user { login } }
-          }
-        }
-      }
-      reviewThreads(first: 100) {
-        nodes {
-          isResolved
-          comments(first: 1) {
-            nodes {
-              pullRequestReview { databaseId }
-            }
           }
         }
       }
@@ -178,15 +161,6 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 
 	pr := result.Repository.PullRequest
 
-	// build map: reviewDatabaseId → list of thread isResolved values
-	reviewThreadResolved := make(map[int64][]bool)
-	for _, thread := range pr.ReviewThreads.Nodes {
-		if len(thread.Comments.Nodes) > 0 && thread.Comments.Nodes[0].PullRequestReview != nil {
-			reviewID := thread.Comments.Nodes[0].PullRequestReview.DatabaseID
-			reviewThreadResolved[reviewID] = append(reviewThreadResolved[reviewID], thread.IsResolved)
-		}
-	}
-
 	// map issue comments
 	var issueComments []IssueComment
 	for _, n := range pr.Comments.Nodes {
@@ -204,12 +178,12 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 	// map reviews
 	var reviews []Review
 	for _, n := range pr.Reviews.Nodes {
-		// check if all threads for this review are resolved
+		// a review is "resolved" if all its comments are minimized
 		allResolved := false
-		if threads, ok := reviewThreadResolved[n.DatabaseID]; ok && len(threads) > 0 {
+		if len(n.Comments.Nodes) > 0 {
 			allResolved = true
-			for _, resolved := range threads {
-				if !resolved {
+			for _, c := range n.Comments.Nodes {
+				if !c.IsMinimized {
 					allResolved = false
 					break
 				}

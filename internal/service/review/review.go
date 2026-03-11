@@ -19,31 +19,41 @@ func NewService(gql *gh.GraphQLClient, owner, repo string) *Service {
 	return &Service{gql: gql, owner: owner, repo: repo}
 }
 
+// Reaction holds a single reaction with its author
+type Reaction struct {
+	Content string
+	Author  string
+}
+
 // ReviewComment holds a single inline review comment
 type ReviewComment struct {
-	DatabaseID       int64
-	Author           string
-	Body             string
-	CreatedAt        string
-	Path             string
-	Line             int
-	DiffHunk         string
-	ReplyToID        int64 // 0 if top-level
-	IsMinimized      bool
-	MinimizedReason  string
-	Outdated         bool
-	SubjectType      string // LINE or FILE
+	DatabaseID      int64
+	Author          string
+	Body            string
+	CreatedAt       string
+	Path            string
+	Line            int
+	StartLine       int
+	CommitID        string
+	DiffHunk        string
+	ReplyToID       int64 // 0 if top-level
+	IsMinimized     bool
+	MinimizedReason string
+	Outdated        bool
+	SubjectType     string // LINE or FILE
+	Reactions       []Reaction
 }
 
 // ReviewDetail holds the full review with its inline comments
 type ReviewDetail struct {
-	DatabaseID   int64
-	Author       string
-	Body         string
-	State        string
-	CreatedAt    string
-	ViewerLogin  string
-	Comments     []ReviewComment
+	DatabaseID  int64
+	Author      string
+	Body        string
+	State       string
+	CreatedAt   string
+	ViewerLogin string
+	Comments    []ReviewComment
+	Reactions   []Reaction
 }
 
 // reviewDetailQuery is the GraphQL response shape
@@ -61,7 +71,7 @@ type reviewDetailQuery struct {
 }
 
 type reviewDetailNode struct {
-	DatabaseID int64  `json:"databaseId"`
+	DatabaseID int64 `json:"databaseId"`
 	Author     struct {
 		Login string `json:"login"`
 	} `json:"author"`
@@ -71,51 +81,43 @@ type reviewDetailNode struct {
 	Comments  struct {
 		Nodes []reviewCommentNode `json:"nodes"`
 	} `json:"comments"`
+	Reactions struct {
+		Nodes []reactionNode `json:"nodes"`
+	} `json:"reactions"`
 }
 
 type reviewCommentNode struct {
-	DatabaseID      int64  `json:"databaseId"`
-	Author          struct {
+	DatabaseID int64 `json:"databaseId"`
+	Author     struct {
 		Login string `json:"login"`
 	} `json:"author"`
-	Body            string `json:"body"`
-	CreatedAt       string `json:"createdAt"`
-	Path            string `json:"path"`
-	Line            *int   `json:"line"`
-	DiffHunk        string `json:"diffHunk"`
-	ReplyTo         *struct {
+	Body           string `json:"body"`
+	CreatedAt      string `json:"createdAt"`
+	Path           string `json:"path"`
+	Line           *int   `json:"line"`
+	StartLine      *int   `json:"startLine"`
+	OriginalCommit *struct {
+		OID string `json:"oid"`
+	} `json:"originalCommit"`
+	DiffHunk string `json:"diffHunk"`
+	ReplyTo  *struct {
 		DatabaseID int64 `json:"databaseId"`
 	} `json:"replyTo"`
 	IsMinimized     bool   `json:"isMinimized"`
 	MinimizedReason string `json:"minimizedReason"`
 	Outdated        bool   `json:"outdated"`
 	SubjectType     string `json:"subjectType"`
+	Reactions       struct {
+		Nodes []reactionNode `json:"nodes"`
+	} `json:"reactions"`
 }
 
-const reviewDetailQueryString = `
-query($owner: String!, $repo: String!, $number: Int!, $reviewID: ID!) {
-  viewer { login }
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) {
-      reviews(first: 1, after: null) {
-        nodes {
-          databaseId
-          author { login }
-          body state createdAt
-          comments(first: 100) {
-            nodes {
-              databaseId
-              author { login }
-              body createdAt path line diffHunk
-              replyTo { databaseId }
-              isMinimized minimizedReason outdated subjectType
-            }
-          }
-        }
-      }
-    }
-  }
-}`
+type reactionNode struct {
+	Content string `json:"content"`
+	User    struct {
+		Login string `json:"login"`
+	} `json:"user"`
+}
 
 // We need to find the review by databaseId, but GraphQL doesn't support filtering by databaseId directly.
 // Instead, fetch all reviews and filter client-side.
@@ -129,13 +131,20 @@ query($owner: String!, $repo: String!, $number: Int!) {
           databaseId
           author { login }
           body state createdAt
+          reactions(first: 20) {
+            nodes { content user { login } }
+          }
           comments(first: 100) {
             nodes {
               databaseId
               author { login }
-              body createdAt path line diffHunk
+              body createdAt path line startLine diffHunk
+              originalCommit { oid }
               replyTo { databaseId }
               isMinimized minimizedReason outdated subjectType
+              reactions(first: 20) {
+                nodes { content user { login } }
+              }
             }
           }
         }
@@ -174,6 +183,7 @@ func mapReviewDetail(n *reviewDetailNode, viewerLogin string) *ReviewDetail {
 		State:       n.State,
 		CreatedAt:   n.CreatedAt,
 		ViewerLogin: viewerLogin,
+		Reactions:   mapReactions(n.Reactions.Nodes),
 	}
 
 	for _, c := range n.Comments.Nodes {
@@ -188,9 +198,16 @@ func mapReviewDetail(n *reviewDetailNode, viewerLogin string) *ReviewDetail {
 			MinimizedReason: c.MinimizedReason,
 			Outdated:        c.Outdated,
 			SubjectType:     c.SubjectType,
+			Reactions:       mapReactions(c.Reactions.Nodes),
 		}
 		if c.Line != nil {
 			rc.Line = *c.Line
+		}
+		if c.StartLine != nil {
+			rc.StartLine = *c.StartLine
+		}
+		if c.OriginalCommit != nil {
+			rc.CommitID = c.OriginalCommit.OID
 		}
 		if c.ReplyTo != nil {
 			rc.ReplyToID = c.ReplyTo.DatabaseID
@@ -204,4 +221,15 @@ func mapReviewDetail(n *reviewDetailNode, viewerLogin string) *ReviewDetail {
 	})
 
 	return detail
+}
+
+func mapReactions(nodes []reactionNode) []Reaction {
+	var reactions []Reaction
+	for _, n := range nodes {
+		reactions = append(reactions, Reaction{
+			Content: n.Content,
+			Author:  n.User.Login,
+		})
+	}
+	return reactions
 }

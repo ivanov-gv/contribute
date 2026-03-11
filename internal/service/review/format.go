@@ -5,6 +5,18 @@ import (
 	"strings"
 )
 
+// reactionEmoji maps GraphQL reaction content enums to emoji
+var reactionEmoji = map[string]string{
+	"THUMBS_UP":   "\U0001f44d",
+	"THUMBS_DOWN": "\U0001f44e",
+	"LAUGH":       "\U0001f604",
+	"HOORAY":      "\U0001f389",
+	"CONFUSED":    "\U0001f615",
+	"HEART":       "\u2764\ufe0f",
+	"ROCKET":      "\U0001f680",
+	"EYES":        "\U0001f440",
+}
+
 // Format renders the review detail as human-readable markdown
 func (d *ReviewDetail) Format() string {
 	var b strings.Builder
@@ -19,6 +31,14 @@ func (d *ReviewDetail) Format() string {
 	if d.Body != "" {
 		b.WriteString(d.Body + "\n")
 		b.WriteString("\n")
+	}
+
+	// review-level reactions
+	b.WriteString(formatReactions(d.Reactions, d.ViewerLogin))
+
+	// separator between review header and comments
+	if len(d.Comments) > 0 {
+		b.WriteString("---\n")
 	}
 
 	// group comments into threads: top-level comments and their replies
@@ -61,7 +81,6 @@ func buildThreads(comments []ReviewComment) []commentThread {
 				thread.replies = append(thread.replies, c)
 			} else {
 				// reply to a reply — find the root thread by walking up
-				// For simplicity, just find any thread that contains the parent
 				placed := false
 				for _, tid := range threadOrder {
 					t := threadMap[tid]
@@ -126,40 +145,47 @@ func formatReviewComment(c *ReviewComment, viewerLogin string, isReply bool) str
 		if reason == "" {
 			reason = "hidden"
 		}
-		b.WriteString(fmt.Sprintf("%s**%s** | hidden: %s\n", prefix, authorDisplay, reason))
+		b.WriteString(fmt.Sprintf("%scomment #%d by %s | hidden: %s\n", prefix, c.DatabaseID, authorDisplay, reason))
 		return b.String()
 	}
 
-	// header line with file context
+	// header line with comment ID, file context, commit
 	if !isReply && c.Path != "" {
+		// build location: path#startLine-endLine or path#line
 		location := c.Path
-		if c.Line > 0 {
+		if c.StartLine > 0 && c.Line > 0 && c.StartLine != c.Line {
+			location = fmt.Sprintf("%s#%d-%d", c.Path, c.StartLine, c.Line)
+		} else if c.Line > 0 {
 			location = fmt.Sprintf("%s#%d", c.Path, c.Line)
 		}
 		outdatedMark := ""
 		if c.Outdated {
 			outdatedMark = " (outdated)"
 		}
-		b.WriteString(fmt.Sprintf("%s**%s** %s%s  \n", prefix, authorDisplay, location, outdatedMark))
+		commitRef := ""
+		if c.CommitID != "" {
+			commitRef = fmt.Sprintf(" `%.7s`", c.CommitID)
+		}
+		b.WriteString(fmt.Sprintf("%scomment #%d by %s %s%s%s  \n", prefix, c.DatabaseID, authorDisplay, location, commitRef, outdatedMark))
 	} else {
-		b.WriteString(fmt.Sprintf("%s**%s**  \n", prefix, authorDisplay))
+		b.WriteString(fmt.Sprintf("%scomment #%d by %s  \n", prefix, c.DatabaseID, authorDisplay))
 	}
 
 	// date
 	b.WriteString(fmt.Sprintf("%s_%s_\n", prefix, formatDate(c.CreatedAt)))
-
-	// diff hunk for top-level comments
-	if !isReply && c.DiffHunk != "" {
-		b.WriteString(fmt.Sprintf("%s```diff\n", prefix))
-		for _, line := range strings.Split(c.DiffHunk, "\n") {
-			b.WriteString(fmt.Sprintf("%s%s\n", prefix, line))
-		}
-		b.WriteString(fmt.Sprintf("%s```\n", prefix))
-	}
+	b.WriteString(prefix + "\n")
 
 	// body
 	for _, line := range strings.Split(c.Body, "\n") {
 		b.WriteString(fmt.Sprintf("%s%s\n", prefix, line))
+	}
+
+	// reactions
+	reactionsStr := formatReactions(c.Reactions, viewerLogin)
+	if reactionsStr != "" {
+		for _, line := range strings.Split(strings.TrimRight(reactionsStr, "\n"), "\n") {
+			b.WriteString(fmt.Sprintf("%s%s\n", prefix, line))
+		}
 	}
 
 	return b.String()
@@ -181,4 +207,48 @@ func formatDate(isoDate string) string {
 	s := strings.TrimSuffix(isoDate, "Z")
 	s = strings.Replace(s, "T", " ", 1)
 	return s
+}
+
+// formatReactions renders reaction summary and "reactions by you" line
+func formatReactions(reactions []Reaction, viewerLogin string) string {
+	if len(reactions) == 0 {
+		return ""
+	}
+
+	counts := make(map[string]int)
+	var byViewer []string
+	for _, r := range reactions {
+		emoji := reactionEmoji[r.Content]
+		if emoji == "" {
+			emoji = r.Content
+		}
+		counts[emoji]++
+		if isViewer(r.Author, viewerLogin) {
+			byViewer = append(byViewer, emoji)
+		}
+	}
+
+	var b strings.Builder
+
+	var parts []string
+	for emoji, count := range counts {
+		parts = append(parts, fmt.Sprintf("%d %s", count, emoji))
+	}
+	b.WriteString(fmt.Sprintf("(%s)  \n", strings.Join(parts, " ")))
+
+	if len(byViewer) > 0 {
+		viewerCounts := make(map[string]int)
+		for _, e := range byViewer {
+			viewerCounts[e]++
+		}
+		var viewerParts []string
+		for emoji, count := range viewerCounts {
+			viewerParts = append(viewerParts, fmt.Sprintf("%d %s", count, emoji))
+		}
+		b.WriteString(fmt.Sprintf("reactions by you: (%s)  \n", strings.Join(viewerParts, " ")))
+	} else {
+		b.WriteString("reactions by you:  \n")
+	}
+
+	return b.String()
 }
