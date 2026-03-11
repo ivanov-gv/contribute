@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -10,21 +9,12 @@ import (
 )
 
 func (a *app) newPRCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "pr [number]",
-		Short: "Show PR details",
-		Args:  cobra.MaximumNArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			var prNumber int
-			if len(args) > 0 {
-				n, err := strconv.Atoi(args[0])
-				if err != nil {
-					return fmt.Errorf("invalid PR number '%s': %w", args[0], err)
-				}
-				prNumber = n
-			}
+	var prNumber int
 
-			// resolve PR number
+	cmd := &cobra.Command{
+		Use:   "pr",
+		Short: "Show PR details",
+		RunE: func(cmd *cobra.Command, args []string) error {
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
 				return err
@@ -40,6 +30,7 @@ func (a *app) newPRCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().IntVar(&prNumber, "pr", 0, "PR number (auto-detected from current branch if not set)")
 	return cmd
 }
 
@@ -49,7 +40,6 @@ func (a *app) resolvePR(prNumber int) (int, error) {
 		return prNumber, nil
 	}
 
-	// auto-detect from current branch
 	branch, err := git.CurrentBranch()
 	if err != nil {
 		return 0, fmt.Errorf("git.CurrentBranch: %w", err)

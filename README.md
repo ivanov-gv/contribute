@@ -20,6 +20,9 @@ gh contribute comment "Fixed the issue, please re-review"
 # react to a comment
 gh contribute react 123456789 eyes --type issue
 gh contribute react 987654321 rocket --type review
+
+# show inline comments for a specific review
+gh contribute review 3929204495
 ```
 
 All commands auto-detect the repository (from git remote) and PR number (from current branch). No configuration needed beyond a `GITHUB_TOKEN`.
@@ -108,6 +111,8 @@ Projects:
 Milestone:
 Issues:
 
+Conversation: 1 comment
+
 ===
 
 test description
@@ -189,6 +194,20 @@ gh contribute react 123456789 eyes --type issue
 
 Valid reactions: `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, `eyes`
 
+### `gh contribute review`
+
+Show a specific review's inline comments with thread context.
+
+```bash
+# show inline comments for review by id (use id from comments output)
+gh contribute review 3929204495
+
+# specify PR explicitly
+gh contribute review 3929204495 --pr 42
+```
+
+Output shows the review body, reactions, and all inline comment threads grouped and sorted, with replies indented using `>`.
+
 ## Installation
 
 ### From GitHub releases
@@ -248,20 +267,23 @@ gh-contribute/
 │   │   ├── pr.go                       # pr command + PR auto-detection
 │   │   ├── comments.go                 # comments command
 │   │   ├── comment.go                  # comment command (post)
-│   │   └── react.go                    # react command
+│   │   ├── react.go                    # react command
+│   │   └── review.go                   # review command (inline comment detail)
 │   ├── config/config.go                # token + repo detection from env/git
-│   ├── github/
-│   │   ├── github.go                   # REST client (mutations)
-│   │   └── graphql.go                  # GraphQL client (queries)
+│   ├── format/format.go                # shared formatting utilities (reactions, dates, authors)
+│   ├── github/graphql.go               # GraphQL client (queries)
 │   ├── git/git.go                      # git helpers (current branch)
 │   └── service/
 │       ├── pr/
 │       │   ├── pr.go                   # PR info and lookup via GraphQL
-│       │   └── format.go              # PR markdown formatting
+│       │   └── format.go               # PR markdown formatting
 │       ├── comment/
-│       │   ├── comment.go             # list via GraphQL, post via REST
-│       │   └── format.go             # comment/review markdown formatting
-│       └── reaction/reaction.go       # add reactions via REST
+│       │   ├── comment.go              # list via GraphQL, post via REST
+│       │   └── format.go              # comment/review markdown formatting
+│       ├── reaction/reaction.go        # add reactions via REST
+│       └── review/
+│           ├── review.go               # review detail with inline comments via GraphQL
+│           └── format.go               # review detail markdown formatting
 ├── go.mod
 └── go.sum
 ```
@@ -274,7 +296,6 @@ Built with:
 
 ## Ways to Improve
 
-- **Review detail command** — expand a specific review's inline comments by review id
 - **Reply to review comments** — post threaded replies to specific inline comments
 - **Diff-aware comments** — post inline review comments on specific files and lines
 - **Webhook listener** — built-in server that watches for review events and triggers agent actions

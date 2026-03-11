@@ -1,11 +1,10 @@
 package reaction
 
 import (
+	"context"
 	"fmt"
 
 	ghrest "github.com/google/go-github/v69/github"
-
-	gh "github.com/ivanov-gv/gh-contribute/internal/github"
 )
 
 // Valid reaction types for GitHub REST API
@@ -28,7 +27,7 @@ func (s *Service) AddToReviewComment(commentID int64, reaction string) error {
 	if !isValid(reaction) {
 		return fmt.Errorf("invalid reaction '%s', valid: %v", reaction, ValidReactions)
 	}
-	_, _, err := s.client.Reactions.CreatePullRequestCommentReaction(gh.Context(), s.owner, s.repo, commentID, reaction)
+	_, _, err := s.client.Reactions.CreatePullRequestCommentReaction(context.Background(), s.owner, s.repo, commentID, reaction)
 	if err != nil {
 		return fmt.Errorf("Reactions.CreatePullRequestCommentReaction [comment=%d, reaction='%s']: %w", commentID, reaction, err)
 	}
@@ -40,7 +39,7 @@ func (s *Service) AddToIssueComment(commentID int64, reaction string) error {
 	if !isValid(reaction) {
 		return fmt.Errorf("invalid reaction '%s', valid: %v", reaction, ValidReactions)
 	}
-	_, _, err := s.client.Reactions.CreateIssueCommentReaction(gh.Context(), s.owner, s.repo, commentID, reaction)
+	_, _, err := s.client.Reactions.CreateIssueCommentReaction(context.Background(), s.owner, s.repo, commentID, reaction)
 	if err != nil {
 		return fmt.Errorf("Reactions.CreateIssueCommentReaction [comment=%d, reaction='%s']: %w", commentID, reaction, err)
 	}
