@@ -37,16 +37,18 @@ func (r *CommentsResult) Format() string {
 	})
 
 	var b strings.Builder
-	for _, e := range entries {
+	for i, e := range entries {
+		if i > 0 {
+			b.WriteString("\n---\n")
+		}
 		if e.issueComment != nil {
 			b.WriteString(formatIssueComment(e.issueComment, r.ViewerLogin))
 		} else {
 			b.WriteString(formatReview(e.review, r.ViewerLogin))
 		}
-		b.WriteString("\n")
 	}
 
-	return strings.TrimRight(b.String(), "\n") + "\n"
+	return b.String()
 }
 
 func formatIssueComment(c *IssueComment, viewerLogin string) string {
@@ -58,12 +60,12 @@ func formatIssueComment(c *IssueComment, viewerLogin string) string {
 		if reason == "" {
 			reason = "hidden"
 		}
-		b.WriteString(fmt.Sprintf("# issue #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason))
+		b.WriteString(fmt.Sprintf("issue #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason))
 		return b.String()
 	}
 
-	b.WriteString(fmt.Sprintf("# issue #%d by %s  \n", c.DatabaseID, authorDisplay))
-	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(c.CreatedAt)))
+	b.WriteString(fmt.Sprintf("issue #%d by %s  \n", c.DatabaseID, authorDisplay))
+	b.WriteString(fmt.Sprintf("_%s_  \n", format.Date(c.CreatedAt)))
 	b.WriteString("\n")
 	b.WriteString(c.Body + "\n")
 	b.WriteString("\n")
@@ -77,17 +79,21 @@ func formatReview(r *Review, viewerLogin string) string {
 
 	authorDisplay := format.Author(r.Author, viewerLogin)
 
-	if r.State == "DISMISSED" {
-		b.WriteString(fmt.Sprintf("# review #%d by %s | hidden: Dismissed\n", r.DatabaseID, authorDisplay))
+	if r.IsMinimized {
+		reason := format.EnumLabel(r.MinimizedReason)
+		if reason == "" {
+			reason = "hidden"
+		}
+		b.WriteString(fmt.Sprintf("review #%d by %s | hidden: %s\n", r.DatabaseID, authorDisplay, reason))
 		return b.String()
 	}
-	if r.IsResolved {
-		b.WriteString(fmt.Sprintf("# review #%d by %s | hidden: Resolved\n", r.DatabaseID, authorDisplay))
+	if r.State == "DISMISSED" {
+		b.WriteString(fmt.Sprintf("review #%d by %s | hidden: Dismissed\n", r.DatabaseID, authorDisplay))
 		return b.String()
 	}
 
-	b.WriteString(fmt.Sprintf("# review #%d by %s  \n", r.DatabaseID, authorDisplay))
-	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(r.CreatedAt)))
+	b.WriteString(fmt.Sprintf("review #%d by %s  \n", r.DatabaseID, authorDisplay))
+	b.WriteString(fmt.Sprintf("_%s_  \n", format.Date(r.CreatedAt)))
 	b.WriteString("\n")
 
 	if r.Body != "" {

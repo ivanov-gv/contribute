@@ -95,9 +95,9 @@ func Reactions(reactions []Reaction, viewerLogin string) string {
 		for emoji, count := range viewerCounts {
 			viewerParts = append(viewerParts, fmt.Sprintf("%d %s", count, emoji))
 		}
-		b.WriteString(fmt.Sprintf("by you: (%s)  \n", strings.Join(viewerParts, " ")))
+		b.WriteString(fmt.Sprintf("reactions by you: (%s)  \n", strings.Join(viewerParts, " ")))
 	} else {
-		b.WriteString("by you:  \n")
+		b.WriteString("reactions by you:  \n")
 	}
 
 	return b.String()

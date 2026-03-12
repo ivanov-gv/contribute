@@ -36,14 +36,15 @@ type IssueComment struct {
 
 // Review holds a PR review summary
 type Review struct {
-	DatabaseID   int64
-	Author       string
-	Body         string
-	State        string // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING
-	CreatedAt    string
-	CommentCount int
-	Reactions    []format.Reaction
-	IsResolved   bool // true when all inline comment threads are resolved
+	DatabaseID      int64
+	Author          string
+	Body            string
+	State           string // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING
+	CreatedAt       string
+	CommentCount    int
+	Reactions       []format.Reaction
+	IsMinimized     bool
+	MinimizedReason string
 }
 
 // CommentsResult holds all comments and reviews for a PR
@@ -66,9 +67,6 @@ type commentsQuery struct {
 			Reviews struct {
 				Nodes []reviewNode `json:"nodes"`
 			} `json:"reviews"`
-			ReviewThreads struct {
-				Nodes []reviewThreadNode `json:"nodes"`
-			} `json:"reviewThreads"`
 		} `json:"pullRequest"`
 	} `json:"repository"`
 }
@@ -86,29 +84,19 @@ type issueCommentNode struct {
 }
 
 type reviewNode struct {
-	DatabaseID int64  `json:"databaseId"`
-	Author     author `json:"author"`
-	Body       string `json:"body"`
-	State      string `json:"state"`
-	CreatedAt  string `json:"createdAt"`
-	Comments   struct {
+	DatabaseID      int64  `json:"databaseId"`
+	Author          author `json:"author"`
+	Body            string `json:"body"`
+	State           string `json:"state"`
+	CreatedAt       string `json:"createdAt"`
+	IsMinimized     bool   `json:"isMinimized"`
+	MinimizedReason string `json:"minimizedReason"`
+	Comments        struct {
 		TotalCount int `json:"totalCount"`
 	} `json:"comments"`
 	Reactions struct {
 		Nodes []reactionNode `json:"nodes"`
 	} `json:"reactions"`
-}
-
-// reviewThreadNode — pullRequestReview is on the first comment in the thread
-type reviewThreadNode struct {
-	IsResolved bool `json:"isResolved"`
-	Comments   struct {
-		Nodes []struct {
-			PullRequestReview struct {
-				DatabaseID int64 `json:"databaseId"`
-			} `json:"pullRequestReview"`
-		} `json:"nodes"`
-	} `json:"comments"`
 }
 
 type author struct {
@@ -141,17 +129,10 @@ query($owner: String!, $repo: String!, $number: Int!) {
           databaseId
           author { login }
           body state createdAt
+          isMinimized minimizedReason
           comments { totalCount }
           reactions(first: 100) {
             nodes { content user { login } }
-          }
-        }
-      }
-      reviewThreads(first: 100) {
-        nodes {
-          isResolved
-          comments(first: 1) {
-            nodes { pullRequestReview { databaseId } }
           }
         }
       }
@@ -173,31 +154,6 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 
 	pr := result.Repository.PullRequest
 
-	// build a map of review IDs to their thread resolution status
-	threadsByReview := make(map[int64][]bool)
-	for _, t := range pr.ReviewThreads.Nodes {
-		if len(t.Comments.Nodes) == 0 {
-			continue
-		}
-		rid := t.Comments.Nodes[0].PullRequestReview.DatabaseID
-		if rid != 0 {
-			threadsByReview[rid] = append(threadsByReview[rid], t.IsResolved)
-		}
-	}
-	resolvedReviews := make(map[int64]bool)
-	for rid, resolved := range threadsByReview {
-		allResolved := true
-		for _, r := range resolved {
-			if !r {
-				allResolved = false
-				break
-			}
-		}
-		if allResolved {
-			resolvedReviews[rid] = true
-		}
-	}
-
 	var issueComments []IssueComment
 	for _, n := range pr.Comments.Nodes {
 		issueComments = append(issueComments, IssueComment{
@@ -214,14 +170,15 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 	var reviews []Review
 	for _, n := range pr.Reviews.Nodes {
 		reviews = append(reviews, Review{
-			DatabaseID:   n.DatabaseID,
-			Author:       n.Author.Login,
-			Body:         n.Body,
-			State:        n.State,
-			CreatedAt:    n.CreatedAt,
-			CommentCount: n.Comments.TotalCount,
-			Reactions:    mapReactions(n.Reactions.Nodes),
-			IsResolved:   resolvedReviews[n.DatabaseID],
+			DatabaseID:      n.DatabaseID,
+			Author:          n.Author.Login,
+			Body:            n.Body,
+			State:           n.State,
+			CreatedAt:       n.CreatedAt,
+			CommentCount:    n.Comments.TotalCount,
+			Reactions:       mapReactions(n.Reactions.Nodes),
+			IsMinimized:     n.IsMinimized,
+			MinimizedReason: n.MinimizedReason,
 		})
 	}
 

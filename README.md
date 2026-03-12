@@ -95,7 +95,7 @@ Show details about a pull request in human-readable markdown.
 gh contribute pr
 
 # specify PR number explicitly
-gh contribute pr --pr 42
+gh contribute pr 42
 ```
 
 Output:
@@ -113,11 +113,11 @@ Issues:
 
 Conversation: 1 comment
 
-===
+---
 
 test description
 
-===
+---
 ```
 
 ### `gh contribute comments`
@@ -134,40 +134,43 @@ gh contribute comments --pr 42
 
 Output:
 ```
-# issue #4038597073 by you (@ivanov-gv-ai-helper)
+issue #4038597073 by you (@ivanov-gv-ai-helper)
 _2026-03-11 11:33:27_
 
 test comment from gh-contribute 🚀
 
 (1 🚀)
-by you: (1 🚀)
+reactions by you: (1 🚀)
 
-# issue #4038819817 by @ivanov-gv
+---
+issue #4038819817 by @ivanov-gv
 _2026-03-11 12:15:54_
 
 > test comment from gh-contribute 🚀
 test reply
 
 (1 😕)
-by you:
+reactions by you:
 
-# review #3929204495 by @ivanov-gv
+---
+review #3929204495 by @ivanov-gv
 _2026-03-11 12:17:34_
 
 submit review
 
 comments: 3
 (1 👀)
-by you:
+reactions by you:
 
-# review #3929353771 by @ivanov-gv | hidden: Resolved
+---
+review #3929353771 by @ivanov-gv | hidden: Resolved
 ```
 
 Key features:
 - **Issue comments** show id, author, date, body, and reactions
 - **Reviews** show id, author, date, body, inline comment count, and reactions
-- **"by you"** tracks which reactions belong to the authenticated user (works with GitHub App `[bot]` accounts)
-- **Hidden items**: minimized issue comments and reviews with all threads resolved show only the header line
+- **"reactions by you"** tracks which reactions belong to the authenticated user (works with GitHub App `[bot]` accounts)
+- **Hidden items**: minimized issue comments and reviews (`isMinimized: true`) show only the header line with the reason
 - Review inline comments are not expanded — use the review id for detailed inspection
 
 ### `gh contribute comment`

@@ -56,13 +56,13 @@ func (info *Info) Format() string {
 	b.WriteString(fmt.Sprintf("\nConversation: %d %s\n", info.CommentCount, commentWord))
 
 	// description
-	b.WriteString("\n===\n\n")
+	b.WriteString("\n---\n\n")
 	body := strings.TrimSpace(info.Body)
 	if body == "" {
 		body = "No description provided."
 	}
 	b.WriteString(body + "\n")
-	b.WriteString("\n===\n")
+	b.WriteString("\n---\n")
 
 	return b.String()
 }
