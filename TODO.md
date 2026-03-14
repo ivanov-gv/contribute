@@ -50,7 +50,7 @@ general rule for output: minimalistic md style
 - only pr description with meta, without comments
 - header with title and pr id
 - meta info 
-- description is separated with ===
+- description is separated with ---
 
 follow example:
 
@@ -59,18 +59,18 @@ follow example:
 open, by @ivanov-gv, 1 commit `test-pr` -> `main`, no merge conflict
 https://github.com/ivanov-gv/gh-contribute/pull/1
 
-Reviewers:  
-Assignees: @ivanov-gv  
-Labels:  
-Projects:  
-Milestone:  
-Issues:  
+Reviewers:
+Assignees: @ivanov-gv
+Labels:
+Projects:
+Milestone:
+Issues:
 
-===
+---
 
 No description provided.
 
-===
+---
 ```
 
 
@@ -86,31 +86,34 @@ No description provided.
 follow example:
 
 ```
-# issue #4038597073 by you (@ivanov-gv-ai-helper[bot]) 
-_2026-03-11 11:33:27_  
+issue #4038597073 by you (@ivanov-gv-ai-helper[bot])
+_2026-03-11 11:33:27_
 
 test comment from gh-contribute 🚀
 
-(1 🚀)  
-by you: (1 🚀)  
+(1 🚀)
+reactions by you: (1 🚀)
 
-# issue #4038819817 by @ivanov-gv
+---
+issue #4038819817 by @ivanov-gv
 _2026-03-11 12:15:54_
 
 > test comment from gh-contribute 🚀
 test reply
 
 (1 😕)
-by you:
+reactions by you:
 
-# review #3929204495 by @ivanov-gv
+---
+review #3929204495 by @ivanov-gv
 _2026-03-11 12:17:34_
 
 submit review
 
 comments: 3
 (1 👀)
-by you: 
+reactions by you:
 
-# review #3929353771 by @ivanov-gv | hidden: Resolved
+---
+review #3929353771 by @ivanov-gv | hidden: Resolved
 ```

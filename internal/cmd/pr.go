@@ -24,7 +24,6 @@ func (a *app) newPRCmd() *cobra.Command {
 				prNumber = n
 			}
 
-			// resolve PR number
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
 				return err
@@ -43,13 +42,12 @@ func (a *app) newPRCmd() *cobra.Command {
 	return cmd
 }
 
-// resolvePR determines the PR number — from flag or by looking up current branch
+// resolvePR determines the PR number — from positional arg or by looking up current branch
 func (a *app) resolvePR(prNumber int) (int, error) {
 	if prNumber > 0 {
 		return prNumber, nil
 	}
 
-	// auto-detect from current branch
 	branch, err := git.CurrentBranch()
 	if err != nil {
 		return 0, fmt.Errorf("git.CurrentBranch: %w", err)

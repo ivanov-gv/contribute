@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/ivanov-gv/gh-contribute/internal/format"
 	gh "github.com/ivanov-gv/gh-contribute/internal/github"
 )
 
@@ -17,12 +18,6 @@ type Service struct {
 // NewService creates a new review service
 func NewService(gql *gh.GraphQLClient, owner, repo string) *Service {
 	return &Service{gql: gql, owner: owner, repo: repo}
-}
-
-// Reaction holds a single reaction with its author
-type Reaction struct {
-	Content string
-	Author  string
 }
 
 // ReviewComment holds a single inline review comment
@@ -40,7 +35,7 @@ type ReviewComment struct {
 	MinimizedReason string
 	Outdated        bool
 	SubjectType     string // LINE or FILE
-	Reactions       []Reaction
+	Reactions       []format.Reaction
 }
 
 // ReviewDetail holds the full review with its inline comments
@@ -52,7 +47,7 @@ type ReviewDetail struct {
 	CreatedAt   string
 	ViewerLogin string
 	Comments    []ReviewComment
-	Reactions   []Reaction
+	Reactions   []format.Reaction
 }
 
 // reviewDetailQuery is the GraphQL response shape
@@ -90,13 +85,13 @@ type reviewCommentNode struct {
 	Author     struct {
 		Login string `json:"login"`
 	} `json:"author"`
-	Body           string `json:"body"`
-	CreatedAt      string `json:"createdAt"`
-	Path           string `json:"path"`
-	Line           *int   `json:"line"`
-	StartLine      *int   `json:"startLine"`
-	DiffHunk string `json:"diffHunk"`
-	ReplyTo  *struct {
+	Body            string `json:"body"`
+	CreatedAt       string `json:"createdAt"`
+	Path            string `json:"path"`
+	Line            *int   `json:"line"`
+	StartLine       *int   `json:"startLine"`
+	DiffHunk        string `json:"diffHunk"`
+	ReplyTo         *struct {
 		DatabaseID int64 `json:"databaseId"`
 	} `json:"replyTo"`
 	IsMinimized     bool   `json:"isMinimized"`
@@ -160,7 +155,6 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64) (*ReviewDetail, erro
 		return nil, fmt.Errorf("GraphQL query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
 	}
 
-	// find the review by databaseId
 	for _, n := range result.Repository.PullRequest.Reviews.Nodes {
 		if n.DatabaseID == reviewDatabaseID {
 			return mapReviewDetail(&n, result.Viewer.Login), nil
@@ -207,7 +201,6 @@ func mapReviewDetail(n *reviewDetailNode, viewerLogin string) *ReviewDetail {
 		detail.Comments = append(detail.Comments, rc)
 	}
 
-	// sort comments by date
 	sort.Slice(detail.Comments, func(i, j int) bool {
 		return detail.Comments[i].CreatedAt < detail.Comments[j].CreatedAt
 	})
@@ -215,13 +208,10 @@ func mapReviewDetail(n *reviewDetailNode, viewerLogin string) *ReviewDetail {
 	return detail
 }
 
-func mapReactions(nodes []reactionNode) []Reaction {
-	var reactions []Reaction
-	for _, n := range nodes {
-		reactions = append(reactions, Reaction{
-			Content: n.Content,
-			Author:  n.User.Login,
-		})
+func mapReactions(nodes []reactionNode) []format.Reaction {
+	reactions := make([]format.Reaction, len(nodes))
+	for i, n := range nodes {
+		reactions[i] = format.Reaction{Content: n.Content, Author: n.User.Login}
 	}
 	return reactions
 }

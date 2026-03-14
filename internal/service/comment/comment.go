@@ -1,10 +1,12 @@
 package comment
 
 import (
+	"context"
 	"fmt"
 
 	ghrest "github.com/google/go-github/v69/github"
 
+	"github.com/ivanov-gv/gh-contribute/internal/format"
 	gh "github.com/ivanov-gv/gh-contribute/internal/github"
 )
 
@@ -21,12 +23,6 @@ func NewService(gql *gh.GraphQLClient, restClient *ghrest.Client, owner, repo st
 	return &Service{gql: gql, restClient: restClient, owner: owner, repo: repo}
 }
 
-// Reaction holds a single reaction with its author
-type Reaction struct {
-	Content string // GraphQL enum: THUMBS_UP, ROCKET, EYES, etc.
-	Author  string
-}
-
 // IssueComment holds a top-level PR comment
 type IssueComment struct {
 	DatabaseID      int64
@@ -35,7 +31,7 @@ type IssueComment struct {
 	CreatedAt       string
 	IsMinimized     bool
 	MinimizedReason string
-	Reactions       []Reaction
+	Reactions       []format.Reaction
 }
 
 // Review holds a PR review summary
@@ -46,7 +42,7 @@ type Review struct {
 	State           string // APPROVED, CHANGES_REQUESTED, COMMENTED, DISMISSED, PENDING
 	CreatedAt       string
 	CommentCount    int
-	Reactions       []Reaction
+	Reactions       []format.Reaction
 	IsMinimized     bool
 	MinimizedReason string
 }
@@ -196,7 +192,7 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 // Post creates a new top-level comment on a PR via REST API
 func (s *Service) Post(prNumber int, body string) (*IssueComment, error) {
 	comment, _, err := s.restClient.Issues.CreateComment(
-		gh.Context(), s.owner, s.repo, prNumber,
+		context.Background(), s.owner, s.repo, prNumber,
 		&ghrest.IssueComment{Body: ghrest.Ptr(body)},
 	)
 	if err != nil {
@@ -231,13 +227,10 @@ func (r *CommentsResult) FilterByID(id int64) *CommentsResult {
 	return nil
 }
 
-func mapReactions(nodes []reactionNode) []Reaction {
-	var reactions []Reaction
-	for _, n := range nodes {
-		reactions = append(reactions, Reaction{
-			Content: n.Content,
-			Author:  n.User.Login,
-		})
+func mapReactions(nodes []reactionNode) []format.Reaction {
+	reactions := make([]format.Reaction, len(nodes))
+	for i, n := range nodes {
+		reactions[i] = format.Reaction{Content: n.Content, Author: n.User.Login}
 	}
 	return reactions
 }

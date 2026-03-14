@@ -80,12 +80,22 @@ func parseRemoteURL(remote string) (string, string, error) {
 	return parseOwnerRepo(parts[1])
 }
 
-// parseOwnerRepo splits "owner/repo.git" into owner and repo
+// parseOwnerRepo extracts "owner/repo" from the last two slash-separated path segments.
+// Handles standard paths ("owner/repo.git") and proxy paths ("/git/owner/repo").
 func parseOwnerRepo(path string) (string, string, error) {
 	path = strings.TrimSuffix(path, ".git")
-	parts := strings.SplitN(path, "/", 2)
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+	parts := strings.Split(path, "/")
+	// filter out empty segments (leading slash, etc.)
+	var segments []string
+	for _, p := range parts {
+		if p != "" {
+			segments = append(segments, p)
+		}
+	}
+	if len(segments) < 2 {
 		return "", "", fmt.Errorf("cannot parse owner/repo from: %s", path)
 	}
-	return parts[0], parts[1], nil
+	owner := segments[len(segments)-2]
+	repo := segments[len(segments)-1]
+	return owner, repo, nil
 }
