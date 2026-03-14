@@ -42,7 +42,9 @@ func (a *app) newPRCmd() *cobra.Command {
 	return cmd
 }
 
-// resolvePR determines the PR number — from positional arg or by looking up current branch
+// resolvePR returns the PR number to operate on.
+// If prNumber > 0 it is used directly; otherwise the current branch is looked up.
+// This avoids every command repeating the same auto-detection logic.
 func (a *app) resolvePR(prNumber int) (int, error) {
 	if prNumber > 0 {
 		return prNumber, nil
