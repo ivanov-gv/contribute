@@ -74,7 +74,7 @@ func newAuthStatusCmd() *cobra.Command {
 				return fmt.Errorf(logfmt+"auth.GetUsername: %w", err)
 			}
 
-			fmt.Printf("Logged in as: %s\n", username)
+			log.Info().Str("username", username).Msg(logfmt + "logged in")
 			return nil
 		},
 	}

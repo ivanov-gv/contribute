@@ -5,6 +5,8 @@ import (
 	"os"
 
 	ghrest "github.com/google/go-github/v69/github"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
 	"github.com/ivanov-gv/gh-contribute/internal/config"
@@ -46,6 +48,9 @@ func (a *app) init() error {
 
 // Execute wires and runs the root command.
 func Execute() {
+	// human-readable console output
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	_app := &app{}
 
 	rootCmd := &cobra.Command{
