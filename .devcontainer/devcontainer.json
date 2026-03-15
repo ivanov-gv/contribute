@@ -36,19 +36,31 @@
   },
   "remoteUser": "dev",
   "mounts": [
-    // Persist shell history and Claude config across rebuilds
+    // Persist shell history across rebuilds
     "source=gh-contribute-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-    "source=gh-contribute-claude-config-${devcontainerId},target=/home/dev/.claude,type=volume"
+    // Share host Claude config (OAuth tokens, settings) — no manual re-auth needed.
+    // Run `mkdir -p ~/.claude` on the host if the directory doesn't exist yet.
+    "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached",
+    // Share host gh-contribute token file — no manual re-auth needed inside the container.
+    // Run `mkdir -p ~/.config/gh-contribute` on the host if the directory doesn't exist yet.
+    "source=${localEnv:HOME}/.config/gh-contribute,target=/home/dev/.config/gh-contribute,type=bind,consistency=cached"
   ],
   "containerEnv": {
-    // Claude Code
+    // Claude Code — ANTHROPIC_API_KEY alone is enough for headless/API-key auth.
+    // If you use OAuth (`claude auth login` on the host), the ~/.claude bind mount above
+    // carries the session into the container automatically.
     "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
-
-    // Pass host credentials into the container.
-    // Set these in your host shell before opening the devcontainer.
     "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+
+    // GitHub auth for gh-contribute.
+    // Priority (from config/token.go): GH_CONTRIBUTE_TOKEN env var → ~/.config/gh-contribute/token file.
+    // Set GH_CONTRIBUTE_TOKEN on the host for env-var auth, or run `gh-contribute auth login`
+    // on the host once — the token file is shared via the bind mount above.
+    "GH_CONTRIBUTE_TOKEN": "${localEnv:GH_CONTRIBUTE_TOKEN}",
+
+    // Standard GitHub tokens forwarded for gh CLI and any other tooling.
     "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
     "GH_TOKEN": "${localEnv:GH_TOKEN}",
 
