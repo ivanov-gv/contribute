@@ -16,8 +16,11 @@ RUN chmod +x /tmp/install-deps.sh && \
   /tmp/install-deps.sh && \
   rm /tmp/install-deps.sh
 
-# Create non-root dev user
-RUN useradd -m -s /bin/zsh -u 1000 dev
+# Create non-root dev user.
+# adduser (Debian wrapper) picks a free UID automatically — avoids the
+# "no matching entries in passwd file" error that occurs when a hard-coded
+# UID like 1000 is already taken by a package installed above.
+RUN adduser --disabled-password --gecos "" --shell /usr/bin/zsh dev
 
 # Allow dev user to use docker group (GID reconciled at runtime in setup.sh)
 RUN groupadd -f docker && usermod -aG docker dev
