@@ -5,14 +5,20 @@
 - `cmd/` — Executable entry points. One subdirectory per binary. Each contains only a `main.go` with minimal wiring (
   config loading, dependency init, server start).
 - `internal/app/` — Core application/business logic. Orchestrates services.
+- `internal/client/` — External API and system clients. One subpackage per client (e.g. `git/`, `github/`, `auth/`).
+  Clients handle all communication with external systems and APIs.
 - `internal/config/` — Configuration loading from environment variables.
 - `internal/server/` — HTTP server, routing, request/response mapping.
 - `internal/service/` — Domain services. One package per concern (e.g. `parser/`, `render/`, `name/`). Services may have
   subpackages for internal structure.
 - `internal/model/` — Data types and constants. One subpackage per domain (e.g. `timetable/`, `message/`, `callback/`).
   No business logic here.
-- `internal/utils/` — Generic reusable helpers not tied to any domain.
+- `internal/utils/` — Generic reusable helpers not tied to any domain. One subpackage per concern (e.g. `format/`).
 - `internal/.../utils` - Reusable helpers tied to a domain
+
+> **Rule**: every folder directly under `internal/` must be a category (a type of structure such as `service/`,
+> `client/`, `model/`), never an individual package. Individual packages live one level deeper inside their category
+> folder. Do not add new packages directly under `internal/`.
 - `gen/` — Generated code. Do not edit manually. Includes generated data files and mockery-generated test mocks (
   configured in `.mockery.yaml`).
 - `test/` — Integration tests (separated from unit tests which live next to source files in `internal/`).

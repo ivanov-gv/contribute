@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ivanov-gv/gh-contribute/internal/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
 // Format renders the review detail as human-readable markdown

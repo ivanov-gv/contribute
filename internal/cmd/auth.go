@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/ivanov-gv/gh-contribute/internal/auth"
+	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
 	"github.com/ivanov-gv/gh-contribute/internal/config"
 )
 
