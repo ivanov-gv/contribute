@@ -1,8 +1,8 @@
 {
-  "name": "gh-contribute",
+  "name": "gh-contribute (claude-code)",
   "build": {
     "dockerfile": "Dockerfile",
-    "context": "..",
+    "context": "../..",
     "args": {
       "TZ": "${localEnv:TZ:Europe/Berlin}",
       "CLAUDE_CODE_VERSION": "latest",
@@ -18,34 +18,22 @@
     "--mount=type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock"
   ],
   "customizations": {
-    "vscode": {
-      "extensions": [
-        "anthropic.claude-code",
-        "golang.go",
-        "eamodio.gitlens"
-      ],
-      "settings": {
-        "terminal.integrated.defaultProfile.linux": "zsh",
-        "terminal.integrated.profiles.linux": {
-          "zsh": { "path": "zsh" },
-          "bash": { "path": "bash", "icon": "terminal-bash" }
-        },
-        "go.toolsManagement.autoUpdate": true
-      }
+    "jetbrains": {
+      "backend": "GoLand"
     }
   },
   "remoteUser": "dev",
   "mounts": [
     // Persist shell history across rebuilds
     "source=gh-contribute-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    // Mount host ~/.claude so local plugins, settings, and auth are available inside the container
+    "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached"
   ],
   "containerEnv": {
     // Claude Code — ANTHROPIC_API_KEY alone is enough for headless/API-key auth.
     // If you use OAuth (`claude auth login` on the host), the ~/.claude bind mount above
     // carries the session into the container automatically.
     "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
-    "NODE_OPTIONS": "--max-old-space-size=4096",
-    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
     "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
 
     // GitHub auth for gh-contribute.
@@ -62,7 +50,9 @@
     // Use: docker run --network "$DOCKER_NETWORK" <image>
     // Containers on this network can reach each other but are isolated from
     // other devcontainers running on the same host Docker daemon.
-    "DOCKER_NETWORK": "gh-contribute-${devcontainerId}"
+    "DOCKER_NETWORK": "gh-contribute-${devcontainerId}",
+
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
   },
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
   "workspaceFolder": "/workspace",
