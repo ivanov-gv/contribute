@@ -26,7 +26,7 @@ func (d *ReviewDetail) Format(showDiff bool) string {
 
 	for i, group := range d.ThreadGroups {
 		if i > 0 {
-			b.WriteString("\n---\n")
+			b.WriteString("\n\n---\n")
 		} else {
 			b.WriteString("\n")
 		}

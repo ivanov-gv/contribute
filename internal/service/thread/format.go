@@ -17,7 +17,7 @@ func (t *Thread) Format() string {
 
 	for i, c := range t.Comments {
 		if i > 0 {
-			b.WriteString("\n---\n")
+			b.WriteString("\n\n---\n")
 		}
 		b.WriteString(formatThreadComment(c, t.ViewerLogin))
 	}
