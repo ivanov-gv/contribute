@@ -1,27 +1,19 @@
-// Default Ubuntu-based DevContainer Template.
-// For more customization options, see https://containers.dev/implementors/json_reference
 {
-  name: "Default",
-  image: "ubuntu:latest",
-
-  customizations : {
-    // Configure JetBrains IDE-specific properties
-    jetbrains : {
-      backend : "IntelliJ",
-      settings : {
-        // IDE settings can be added via “Show context actions”|“Add currently modified settings from IDE”.
-        // A complete list of supported settings is also available through auto-completion
-      },
-      plugins: [
-        // A set of plugin IDs.
-        // Plugin ID can be found on the corresponding plugin’s page at https://plugins.jetbrains.com.
-      ]
+  "name": "gh-contribute (default)",
+  "image": "golang:latest",
+  "customizations": {
+    "jetbrains": {
+      "backend": "GoLand"
     }
   },
-  features: {
-    "ghcr.io/devcontainers/features/git" : {},
-    // Add additional features to your project using auto-completion.
+  "remoteUser": "root",
+  "containerEnv": {
+    "GOPATH": "/root/go",
+    // Extend the base image PATH to include the user's Go bin directory.
+    // golang:latest already includes /usr/local/go/bin; this adds /root/go/bin for
+    // tools installed via `go install` (e.g. gopls).
+    "PATH": "${containerEnv:PATH}:/root/go/bin"
   },
-  // Comment out to connect as the root user.
-  remoteUser: "ubuntu"
+  // Install gopls on first create. Subsequent rebuilds skip this since the volume is cached.
+  "postCreateCommand": "go install golang.org/x/tools/gopls@latest"
 }
