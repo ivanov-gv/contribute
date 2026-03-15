@@ -46,17 +46,30 @@ Full development environment for JetBrains GoLand with Claude Code CLI. Designed
 ### Dockerfile
 
 - **Base image:** `golang:latest` (Debian Bookworm, always latest Go)
-- **No Node.js, no npm** — Claude Code installed as a native standalone binary, downloaded from official GitHub releases with architecture detection at build time
-- **gopls** installed via `go install golang.org/x/tools/gopls@latest`
+- **No Node.js, no npm** — remove the Node.js install from `install-deps.sh`, remove the npm global dir setup (`/usr/local/share/npm-global`, `chown`, `NPM_CONFIG_PREFIX`, `PATH` extension for npm), and replace `npm install -g @anthropic-ai/claude-code` with the native binary install below
+- **Claude Code native binary installation:**
+  1. Detect arch: `ARCH=$(dpkg --print-architecture)` → maps to `amd64` or `arm64`
+  2. Map to Claude Code release arch: `amd64` → `x64`, `arm64` → `arm64`
+  3. Fetch latest release tag from GitHub API: `curl -s https://api.github.com/repos/anthropics/claude-code/releases/latest | jq -r '.tag_name'`
+  4. Download binary: `https://github.com/anthropics/claude-code/releases/download/<tag>/claude-linux-<arch>`
+  5. Install to `/usr/local/bin/claude`, `chmod +x`
+  6. Verify: `claude --version`
+  - Note: exact release asset naming must be confirmed against the GitHub releases page at implementation time
+- **gopls** installed via `go install golang.org/x/tools/gopls@latest` (run as `dev` user so it lands in `$GOPATH/bin`)
 - **Dev user:** non-root `dev` user with zsh as default shell
 - **Shell:** zsh + Powerline10k theme (via zsh-in-docker), fzf key bindings
 - **Tools:** git, git-delta, Docker CLI (no daemon), docker-compose-plugin, iptables, ipset, iproute2, dnsutils, aggregate, jq, gh, nano, vim, sudo
-- **Firewall scripts** copied to `/usr/local/bin/` with passwordless sudo for `dev`
+- **Firewall scripts** copied to `/usr/local/bin/` from `.devcontainer/shared/` — updated `COPY` paths:
+  - `COPY .devcontainer/claude-code/install-deps.sh /tmp/install-deps.sh`
+  - `COPY .devcontainer/shared/init-firewall.sh /usr/local/bin/`
+  - `COPY .devcontainer/shared/setup.sh /usr/local/bin/`
+- **Passwordless sudo** for `dev` on firewall scripts only
 - **History persistence:** `/commandhistory` directory owned by `dev`
+- **`NODE_OPTIONS` removed** — intentionally dropped along with Node.js
 
 ### install-deps.sh
 
-Same as current but with the Node.js section removed entirely.
+Same as current but with the Node.js section (`nodesource` setup, `nodejs` apt install) removed entirely.
 
 ### devcontainer.json
 
@@ -67,6 +80,7 @@ Same as current but with the Node.js section removed entirely.
 | `build.context` | `../..` |
 | `build.args` | `TZ`, `CLAUDE_CODE_VERSION`, `GIT_DELTA_VERSION`, `ZSH_IN_DOCKER_VERSION` |
 | `runArgs` | `--cap-add=NET_ADMIN`, `--cap-add=NET_RAW`, Docker socket bind mount |
+| `mounts` | history volume + `~/.claude` bind mount (see below) |
 | `remoteUser` | `dev` |
 | `workspaceMount` | bind, delegated consistency |
 | `workspaceFolder` | `/workspace` |
@@ -127,6 +141,8 @@ Minimal Go development environment for JetBrains GoLand. No Claude Code, no fire
 
 No mounts, no runArgs, no firewall, no extra tools. Git is already present in the base image.
 
+`remoteUser: root` is intentional — avoids user management overhead in a minimal setup. `GOPATH=/root/go` and the corresponding `PATH` extension follow from this.
+
 ---
 
 ## Variant 3: `claude-session`
@@ -144,15 +160,23 @@ Identical content to `claude-code/Dockerfile`. Same base, same tools, same Claud
 ```yaml
 services:
   claude-session:
-    build: .
+    build:
+      context: ../..
+      dockerfile: deploy/claude-session/Dockerfile
     stdin_open: true
     tty: true
+    user: dev
+    command: /bin/zsh
     cap_add:
       - NET_ADMIN
       - NET_RAW
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 ```
+
+- `build.context: ../..` sets the build context to the workspace root — this means the `claude-session/Dockerfile` is **identical** to `claude-code/Dockerfile` (same `COPY .devcontainer/shared/...` paths work unchanged). No separate copy with adjusted paths needed.
+- `user: dev` ensures the session starts as the non-root `dev` user explicitly.
+- `command: /bin/zsh` overrides the `golang:latest` default (`bash`) to drop into zsh.
 
 **Usage:**
 ```bash
@@ -173,7 +197,7 @@ No workspace bind mount (fresh clone inside container), no `~/.claude` bind moun
 - GitHub IP ranges
 - `api.anthropic.com`
 - Go module proxy / checksum DB
-- npm registry (kept — useful even without Node.js, Claude Code may use it)
+- npm registry (removed — Node.js and npm are not installed; no longer applicable)
 - Docker Hub, GHCR
 - Sentry, Statsig, VS Code Marketplace (Claude Code internals)
 - DNS, SSH, localhost, host Docker network
