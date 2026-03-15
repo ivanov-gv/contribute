@@ -66,7 +66,7 @@ type reactionNode struct {
 
 // reviewCommentNodeNoDiff - comment query shape without diffHunk
 type reviewCommentNodeNoDiff struct {
-	DatabaseID githubv4.Int
+	DatabaseID int64
 	Author     struct {
 		Login githubv4.String
 	}
@@ -84,7 +84,7 @@ type reviewCommentNodeNoDiff struct {
 		OID githubv4.String `graphql:"oid"`
 	}
 	ReplyTo *struct {
-		DatabaseID githubv4.Int
+		DatabaseID int64
 	}
 	IsMinimized     githubv4.Boolean
 	MinimizedReason githubv4.String
@@ -97,7 +97,7 @@ type reviewCommentNodeNoDiff struct {
 
 // reviewCommentNodeWithDiff - comment query shape with diffHunk
 type reviewCommentNodeWithDiff struct {
-	DatabaseID githubv4.Int
+	DatabaseID int64
 	Author     struct {
 		Login githubv4.String
 	}
@@ -116,7 +116,7 @@ type reviewCommentNodeWithDiff struct {
 	}
 	DiffHunk githubv4.String
 	ReplyTo  *struct {
-		DatabaseID githubv4.Int
+		DatabaseID int64
 	}
 	IsMinimized     githubv4.Boolean
 	MinimizedReason githubv4.String
@@ -129,7 +129,7 @@ type reviewCommentNodeWithDiff struct {
 
 // reviewDetailNodeNoDiff - review node with no-diff comments
 type reviewDetailNodeNoDiff struct {
-	DatabaseID githubv4.Int
+	DatabaseID int64
 	Author     struct {
 		Login githubv4.String
 	}
@@ -146,7 +146,7 @@ type reviewDetailNodeNoDiff struct {
 
 // reviewDetailNodeWithDiff - review node with diff-included comments
 type reviewDetailNodeWithDiff struct {
-	DatabaseID githubv4.Int
+	DatabaseID int64
 	Author     struct {
 		Login githubv4.String
 	}
@@ -207,7 +207,7 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*Rev
 			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
 		}
 		for _, n := range query.Repository.PullRequest.Reviews.Nodes {
-			if int64(n.DatabaseID) == reviewDatabaseID {
+			if n.DatabaseID == reviewDatabaseID {
 				return mapReviewDetailWithDiff(&n, string(query.Viewer.Login)), nil
 			}
 		}
@@ -217,7 +217,7 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*Rev
 			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
 		}
 		for _, n := range query.Repository.PullRequest.Reviews.Nodes {
-			if int64(n.DatabaseID) == reviewDatabaseID {
+			if n.DatabaseID == reviewDatabaseID {
 				return mapReviewDetailNoDiff(&n, string(query.Viewer.Login)), nil
 			}
 		}
@@ -228,7 +228,7 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*Rev
 
 // mapCommentCore maps common comment fields plus an optional diffHunk into a ReviewComment
 func mapCommentCore(
-	databaseID githubv4.Int,
+	databaseID int64,
 	authorLogin githubv4.String,
 	body githubv4.String,
 	createdAt githubv4.DateTime,
@@ -241,7 +241,7 @@ func mapCommentCore(
 		OID githubv4.String `graphql:"oid"`
 	},
 	diffHunk string,
-	replyTo *struct{ DatabaseID githubv4.Int },
+	replyTo *struct{ DatabaseID int64 },
 	isMinimized githubv4.Boolean,
 	minimizedReason githubv4.String,
 	outdated githubv4.Boolean,
@@ -249,7 +249,7 @@ func mapCommentCore(
 	reactions []reactionNode,
 ) ReviewComment {
 	rc := ReviewComment{
-		DatabaseID:      int64(databaseID),
+		DatabaseID:      databaseID,
 		Author:          string(authorLogin),
 		Body:            string(body),
 		CreatedAt:       createdAt.UTC().Format("2006-01-02T15:04:05Z"),
@@ -280,7 +280,7 @@ func mapCommentCore(
 		rc.OriginalCommitSHA = string(originalCommit.OID)
 	}
 	if replyTo != nil {
-		rc.ReplyToID = int64(replyTo.DatabaseID)
+		rc.ReplyToID = replyTo.DatabaseID
 	}
 	return rc
 }
@@ -307,7 +307,7 @@ func mapCommentWithDiff(c reviewCommentNodeWithDiff) ReviewComment {
 
 // buildReviewDetail assembles a ReviewDetail from already-mapped comments
 func buildReviewDetail(
-	databaseID githubv4.Int,
+	databaseID int64,
 	authorLogin githubv4.String,
 	body githubv4.String,
 	state githubv4.String,
@@ -320,7 +320,7 @@ func buildReviewDetail(
 		return comments[i].CreatedAt < comments[j].CreatedAt
 	})
 	return &ReviewDetail{
-		DatabaseID:  int64(databaseID),
+		DatabaseID:  databaseID,
 		Author:      string(authorLogin),
 		Body:        string(body),
 		State:       string(state),
