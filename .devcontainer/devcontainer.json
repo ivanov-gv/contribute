@@ -6,7 +6,6 @@
     "args": {
       "TZ": "${localEnv:TZ:Europe/Berlin}",
       "CLAUDE_CODE_VERSION": "latest",
-      "GO_VERSION": "1.24.1",
       "GIT_DELTA_VERSION": "0.18.2",
       "ZSH_IN_DOCKER_VERSION": "1.2.0"
     }
@@ -35,15 +34,15 @@
       }
     }
   },
-  "remoteUser": "node",
+  "remoteUser": "dev",
   "mounts": [
     // Persist shell history and Claude config across rebuilds
     "source=gh-contribute-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-    "source=gh-contribute-claude-config-${devcontainerId},target=/home/node/.claude,type=volume"
+    "source=gh-contribute-claude-config-${devcontainerId},target=/home/dev/.claude,type=volume"
   ],
   "containerEnv": {
     // Claude Code
-    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
+    "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
     "NODE_OPTIONS": "--max-old-space-size=4096",
     "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
 

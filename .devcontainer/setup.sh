@@ -6,7 +6,7 @@
 #      All test containers started by Claude Code must join this network so they
 #      are reachable from the devcontainer but invisible to other devcontainers
 #      running on the same host Docker daemon.
-#   2. Grant the node user access to the Docker socket if it exists.
+#   2. Grant the dev user access to the Docker socket if it exists.
 #   3. Apply the outbound firewall (delegates to init-firewall.sh).
 set -euo pipefail
 IFS=$'\n\t'
@@ -27,7 +27,7 @@ else
     echo "Created Docker network: $NETWORK_NAME"
 fi
 
-# Write the network name to a file readable by the node user.
+# Write the network name to a file readable by the dev user.
 # This lets shell scripts source it, in addition to the env var.
 echo "export DOCKER_NETWORK=$NETWORK_NAME" > /etc/profile.d/docker-network.sh
 chmod 644 /etc/profile.d/docker-network.sh
@@ -36,14 +36,14 @@ chmod 644 /etc/profile.d/docker-network.sh
 
 DOCKER_SOCK=/var/run/docker.sock
 if [ -S "$DOCKER_SOCK" ]; then
-    # Get the GID of the socket and add node user to that group
+    # Get the GID of the socket and add dev user to that group
     DOCKER_GID=$(stat -c '%g' "$DOCKER_SOCK")
     if ! getent group "$DOCKER_GID" >/dev/null 2>&1; then
         groupadd -g "$DOCKER_GID" docker-host
     fi
     DOCKER_GROUP=$(getent group "$DOCKER_GID" | cut -d: -f1)
-    usermod -aG "$DOCKER_GROUP" node
-    echo "Added node user to group '$DOCKER_GROUP' (gid=$DOCKER_GID) for Docker socket access"
+    usermod -aG "$DOCKER_GROUP" dev
+    echo "Added dev user to group '$DOCKER_GROUP' (gid=$DOCKER_GID) for Docker socket access"
 else
     echo "WARNING: Docker socket not found at $DOCKER_SOCK — Docker-in-Docker will not work"
 fi
