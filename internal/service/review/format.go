@@ -8,7 +8,7 @@ import (
 )
 
 // Format renders the review detail as human-readable markdown.
-// When showDiff is true, diffHunk is included for each thread.
+// When showDiff is true, the diff hunk is included below each thread header.
 func (d *ReviewDetail) Format(showDiff bool) string {
 	var b strings.Builder
 
@@ -24,47 +24,40 @@ func (d *ReviewDetail) Format(showDiff bool) string {
 
 	b.WriteString(format.Reactions(d.Reactions, d.ViewerLogin))
 
-	for i, thread := range d.Threads {
+	for _, group := range d.ThreadGroups {
 		b.WriteString("\n---\n")
-		b.WriteString(formatThread(thread, i+1, d.ViewerLogin, showDiff))
+		b.WriteString(formatThreadGroup(group, d.ViewerLogin, showDiff))
 		b.WriteString("\n---")
 	}
 
-	if len(d.Threads) > 0 {
+	if len(d.ThreadGroups) > 0 {
 		b.WriteString("\n")
 	}
 
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
-func formatThread(thread ReviewThread, threadNum int, viewerLogin string, showDiff bool) string {
+func formatThreadGroup(g ReviewThreadGroup, viewerLogin string, showDiff bool) string {
 	var b strings.Builder
 
-	if len(thread.Comments) == 0 {
-		return ""
-	}
+	// thread header: ID and location so the user can look up the full thread
+	location := formatLocation(g)
+	b.WriteString(fmt.Sprintf("thread #%d  %s  \n", g.ThreadID, location))
 
-	// root comment — first in the thread
-	root := thread.Comments[0]
-	b.WriteString(formatThreadRoot(root, thread, threadNum, viewerLogin))
-
-	if showDiff && thread.DiffHunk != "" {
+	if showDiff && g.DiffHunk != "" {
 		b.WriteString("\n```diff\n")
-		b.WriteString(thread.DiffHunk + "\n")
+		b.WriteString(g.DiffHunk + "\n")
 		b.WriteString("```\n")
 	}
 
-	// replies — all subsequent comments
-	for _, reply := range thread.Comments[1:] {
-		b.WriteString(formatReply(reply, viewerLogin))
+	for _, c := range g.Comments {
+		b.WriteString(formatReviewComment(c, viewerLogin))
 	}
 
 	return b.String()
 }
 
-// formatThreadRoot formats the first comment in a thread.
-// Format: `thread #N comment #ID by author  location  `
-func formatThreadRoot(c ReviewComment, thread ReviewThread, threadNum int, viewerLogin string) string {
+func formatReviewComment(c ReviewComment, viewerLogin string) string {
 	var b strings.Builder
 	authorDisplay := format.Author(c.Author, viewerLogin)
 
@@ -73,12 +66,20 @@ func formatThreadRoot(c ReviewComment, thread ReviewThread, threadNum int, viewe
 		if reason == "" {
 			reason = "hidden"
 		}
-		b.WriteString(fmt.Sprintf("thread #%d comment #%d by %s | hidden: %s\n", threadNum, c.DatabaseID, authorDisplay, reason))
+		b.WriteString(fmt.Sprintf("comment #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason))
 		return b.String()
 	}
 
-	location := formatLocation(thread)
-	b.WriteString(fmt.Sprintf("thread #%d comment #%d by %s  %s  \n", threadNum, c.DatabaseID, authorDisplay, location))
+	if c.ReplyToID == 0 {
+		// thread root
+		b.WriteString(fmt.Sprintf("comment #%d by %s  \n", c.DatabaseID, authorDisplay))
+	} else if c.ReplyToIsExternal {
+		// reply to a comment from another review — flag it clearly
+		b.WriteString(fmt.Sprintf("reply #%d to #%d (not in this review)  by %s  \n", c.DatabaseID, c.ReplyToID, authorDisplay))
+	} else {
+		b.WriteString(fmt.Sprintf("reply #%d to #%d  by %s  \n", c.DatabaseID, c.ReplyToID, authorDisplay))
+	}
+
 	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(c.CreatedAt)))
 	b.WriteString("\n")
 
@@ -93,63 +94,33 @@ func formatThreadRoot(c ReviewComment, thread ReviewThread, threadNum int, viewe
 	return b.String()
 }
 
-// formatReply formats a reply comment in a thread.
-// Format: `reply #ID to #parentID  by author`
-func formatReply(c ReviewComment, viewerLogin string) string {
-	var b strings.Builder
-	authorDisplay := format.Author(c.Author, viewerLogin)
-
-	if c.IsMinimized {
-		reason := format.EnumLabel(c.MinimizedReason)
-		if reason == "" {
-			reason = "hidden"
-		}
-		b.WriteString(fmt.Sprintf("reply #%d to #%d  by %s | hidden: %s\n", c.DatabaseID, c.ReplyToID, authorDisplay, reason))
-		return b.String()
-	}
-
-	b.WriteString(fmt.Sprintf("reply #%d to #%d  by %s\n", c.DatabaseID, c.ReplyToID, authorDisplay))
-	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(c.CreatedAt)))
-	b.WriteString("\n")
-
-	for _, line := range strings.Split(c.Body, "\n") {
-		b.WriteString(line + "\n")
-	}
-
-	if reactionsStr := format.Reactions(c.Reactions, viewerLogin); reactionsStr != "" {
-		b.WriteString(reactionsStr)
-	}
-
-	return b.String()
-}
-
-// formatLocation builds the file/line location string from thread-level fields.
+// formatLocation builds the location string from thread-level fields.
 // For up-to-date: `path on lines +startLine to +line`
 // For outdated:   `path on original lines startLine to line (outdated)`
-func formatLocation(t ReviewThread) string {
-	if t.Path == "" {
+func formatLocation(g ReviewThreadGroup) string {
+	if g.Path == "" {
 		return ""
 	}
-	if t.IsOutdated {
-		return formatOutdatedLocation(t)
+	if g.IsOutdated {
+		return formatOutdatedLocation(g)
 	}
-	return formatCurrentLocation(t)
+	return formatCurrentLocation(g)
 }
 
-func formatCurrentLocation(t ReviewThread) string {
-	if t.StartLine > 0 && t.Line > 0 && t.StartLine != t.Line {
-		return fmt.Sprintf("%s on lines +%d to +%d", t.Path, t.StartLine, t.Line)
-	} else if t.Line > 0 {
-		return fmt.Sprintf("%s on line +%d", t.Path, t.Line)
+func formatCurrentLocation(g ReviewThreadGroup) string {
+	if g.StartLine > 0 && g.Line > 0 && g.StartLine != g.Line {
+		return fmt.Sprintf("%s on lines +%d to +%d", g.Path, g.StartLine, g.Line)
+	} else if g.Line > 0 {
+		return fmt.Sprintf("%s on line +%d", g.Path, g.Line)
 	}
-	return t.Path
+	return g.Path
 }
 
-func formatOutdatedLocation(t ReviewThread) string {
-	if t.OriginalStartLine > 0 && t.OriginalLine > 0 && t.OriginalStartLine != t.OriginalLine {
-		return fmt.Sprintf("%s on original lines %d to %d (outdated)", t.Path, t.OriginalStartLine, t.OriginalLine)
-	} else if t.OriginalLine > 0 {
-		return fmt.Sprintf("%s on original line %d (outdated)", t.Path, t.OriginalLine)
+func formatOutdatedLocation(g ReviewThreadGroup) string {
+	if g.OriginalStartLine > 0 && g.OriginalLine > 0 && g.OriginalStartLine != g.OriginalLine {
+		return fmt.Sprintf("%s on original lines %d to %d (outdated)", g.Path, g.OriginalStartLine, g.OriginalLine)
+	} else if g.OriginalLine > 0 {
+		return fmt.Sprintf("%s on original line %d (outdated)", g.Path, g.OriginalLine)
 	}
-	return fmt.Sprintf("%s (outdated)", t.Path)
+	return fmt.Sprintf("%s (outdated)", g.Path)
 }
