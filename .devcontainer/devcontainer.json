@@ -1,0 +1,69 @@
+{
+  "name": "gh-contribute",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "TZ": "${localEnv:TZ:Europe/Berlin}",
+      "CLAUDE_CODE_VERSION": "latest",
+      "GO_VERSION": "1.24.1",
+      "GIT_DELTA_VERSION": "0.18.2",
+      "ZSH_IN_DOCKER_VERSION": "1.2.0"
+    }
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    // Mount host Docker socket so Claude Code can run containers for testing.
+    // Containers are placed on an isolated per-devcontainer bridge network (see setup.sh).
+    "--mount=type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "golang.go",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": { "path": "zsh" },
+          "bash": { "path": "bash", "icon": "terminal-bash" }
+        },
+        "go.toolsManagement.autoUpdate": true
+      }
+    }
+  },
+  "remoteUser": "node",
+  "mounts": [
+    // Persist shell history and Claude config across rebuilds
+    "source=gh-contribute-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    "source=gh-contribute-claude-config-${devcontainerId},target=/home/node/.claude,type=volume"
+  ],
+  "containerEnv": {
+    // Claude Code
+    "CLAUDE_CONFIG_DIR": "/home/node/.claude",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+
+    // Pass host credentials into the container.
+    // Set these in your host shell before opening the devcontainer.
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+
+    // Docker network name for test containers — set by setup.sh on start.
+    // Use: docker run --network "$DOCKER_NETWORK" <image>
+    // Containers on this network can reach each other but are isolated from
+    // other devcontainers running on the same host Docker daemon.
+    "DOCKER_NETWORK": "gh-contribute-${devcontainerId}"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+
+  // setup.sh: creates the isolated Docker network, then locks down outbound traffic via iptables.
+  // Running with sudo because iptables and Docker network creation require root.
+  "postStartCommand": "sudo /usr/local/bin/setup.sh",
+  "waitFor": "postStartCommand"
+}
