@@ -5,21 +5,21 @@ import (
 	"fmt"
 
 	ghrest "github.com/google/go-github/v69/github"
+	"github.com/shurcooL/githubv4"
 
 	"github.com/ivanov-gv/gh-contribute/internal/format"
-	gh "github.com/ivanov-gv/gh-contribute/internal/github"
 )
 
 // Service provides comment operations — GraphQL for reads, REST for writes
 type Service struct {
-	gql        *gh.GraphQLClient
+	gql        *githubv4.Client
 	restClient *ghrest.Client
 	owner      string
 	repo       string
 }
 
 // NewService creates a new comment service
-func NewService(gql *gh.GraphQLClient, restClient *ghrest.Client, owner, repo string) *Service {
+func NewService(gql *githubv4.Client, restClient *ghrest.Client, owner, repo string) *Service {
 	return &Service{gql: gql, restClient: restClient, owner: owner, repo: repo}
 }
 
@@ -54,115 +54,88 @@ type CommentsResult struct {
 	Reviews       []Review
 }
 
-// commentsQuery is the GraphQL response shape
+// reactionNode is a single reaction with content and author
+type reactionNode struct {
+	Content githubv4.String
+	User    struct {
+		Login githubv4.String
+	}
+}
+
+// issueCommentNode is a single top-level comment node
+type issueCommentNode struct {
+	DatabaseID      githubv4.Int
+	Author          struct {
+		Login githubv4.String
+	}
+	Body            githubv4.String
+	CreatedAt       githubv4.DateTime
+	IsMinimized     githubv4.Boolean
+	MinimizedReason githubv4.String
+	Reactions       struct {
+		Nodes []reactionNode
+	} `graphql:"reactions(first: 100)"`
+}
+
+// reviewNode is a single review node
+type reviewNode struct {
+	DatabaseID githubv4.Int
+	Author     struct {
+		Login githubv4.String
+	}
+	Body            githubv4.String
+	State           githubv4.String
+	CreatedAt       githubv4.DateTime
+	IsMinimized     githubv4.Boolean
+	MinimizedReason githubv4.String
+	Comments        struct {
+		TotalCount githubv4.Int
+	}
+	Reactions struct {
+		Nodes []reactionNode
+	} `graphql:"reactions(first: 100)"`
+}
+
+// commentsQuery defines the GraphQL query shape for listing all comments and reviews on a PR
 type commentsQuery struct {
 	Viewer struct {
-		Login string `json:"login"`
-	} `json:"viewer"`
+		Login githubv4.String
+	}
 	Repository struct {
 		PullRequest struct {
 			Comments struct {
-				Nodes []issueCommentNode `json:"nodes"`
-			} `json:"comments"`
+				Nodes []issueCommentNode
+			} `graphql:"comments(first: 100)"`
 			Reviews struct {
-				Nodes []reviewNode `json:"nodes"`
-			} `json:"reviews"`
-		} `json:"pullRequest"`
-	} `json:"repository"`
+				Nodes []reviewNode
+			} `graphql:"reviews(first: 100)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
-
-type issueCommentNode struct {
-	DatabaseID      int64  `json:"databaseId"`
-	Author          author `json:"author"`
-	Body            string `json:"body"`
-	CreatedAt       string `json:"createdAt"`
-	IsMinimized     bool   `json:"isMinimized"`
-	MinimizedReason string `json:"minimizedReason"`
-	Reactions       struct {
-		Nodes []reactionNode `json:"nodes"`
-	} `json:"reactions"`
-}
-
-type reviewNode struct {
-	DatabaseID      int64  `json:"databaseId"`
-	Author          author `json:"author"`
-	Body            string `json:"body"`
-	State           string `json:"state"`
-	CreatedAt       string `json:"createdAt"`
-	IsMinimized     bool   `json:"isMinimized"`
-	MinimizedReason string `json:"minimizedReason"`
-	Comments        struct {
-		TotalCount int `json:"totalCount"`
-	} `json:"comments"`
-	Reactions struct {
-		Nodes []reactionNode `json:"nodes"`
-	} `json:"reactions"`
-}
-
-type author struct {
-	Login string `json:"login"`
-}
-
-type reactionNode struct {
-	Content string `json:"content"`
-	User    author `json:"user"`
-}
-
-const commentsQueryString = `
-query($owner: String!, $repo: String!, $number: Int!) {
-  viewer { login }
-  repository(owner: $owner, name: $repo) {
-    pullRequest(number: $number) {
-      comments(first: 100) {
-        nodes {
-          databaseId
-          author { login }
-          body createdAt
-          isMinimized minimizedReason
-          reactions(first: 100) {
-            nodes { content user { login } }
-          }
-        }
-      }
-      reviews(first: 100) {
-        nodes {
-          databaseId
-          author { login }
-          body state createdAt
-          isMinimized minimizedReason
-          comments { totalCount }
-          reactions(first: 100) {
-            nodes { content user { login } }
-          }
-        }
-      }
-    }
-  }
-}`
 
 // List fetches all issue comments and reviews for a PR
 func (s *Service) List(prNumber int) (*CommentsResult, error) {
-	var result commentsQuery
-	err := s.gql.Query(commentsQueryString, map[string]interface{}{
-		"owner":  s.owner,
-		"repo":   s.repo,
-		"number": prNumber,
-	}, &result)
-	if err != nil {
-		return nil, fmt.Errorf("GraphQL query [pr=%d]: %w", prNumber, err)
+	var query commentsQuery
+	variables := map[string]interface{}{
+		"owner":  githubv4.String(s.owner),
+		"repo":   githubv4.String(s.repo),
+		"number": githubv4.Int(prNumber),
+	}
+	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+		return nil, fmt.Errorf("gql.Query [pr=%d]: %w", prNumber, err)
 	}
 
-	pr := result.Repository.PullRequest
+	pr := query.Repository.PullRequest
 
 	var issueComments []IssueComment
 	for _, n := range pr.Comments.Nodes {
 		issueComments = append(issueComments, IssueComment{
-			DatabaseID:      n.DatabaseID,
-			Author:          n.Author.Login,
-			Body:            n.Body,
-			CreatedAt:       n.CreatedAt,
-			IsMinimized:     n.IsMinimized,
-			MinimizedReason: n.MinimizedReason,
+			DatabaseID:      int64(n.DatabaseID),
+			Author:          string(n.Author.Login),
+			Body:            string(n.Body),
+			CreatedAt:       n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			IsMinimized:     bool(n.IsMinimized),
+			MinimizedReason: string(n.MinimizedReason),
 			Reactions:       mapReactions(n.Reactions.Nodes),
 		})
 	}
@@ -170,20 +143,20 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 	var reviews []Review
 	for _, n := range pr.Reviews.Nodes {
 		reviews = append(reviews, Review{
-			DatabaseID:      n.DatabaseID,
-			Author:          n.Author.Login,
-			Body:            n.Body,
-			State:           n.State,
-			CreatedAt:       n.CreatedAt,
-			CommentCount:    n.Comments.TotalCount,
+			DatabaseID:      int64(n.DatabaseID),
+			Author:          string(n.Author.Login),
+			Body:            string(n.Body),
+			State:           string(n.State),
+			CreatedAt:       n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			CommentCount:    int(n.Comments.TotalCount),
 			Reactions:       mapReactions(n.Reactions.Nodes),
-			IsMinimized:     n.IsMinimized,
-			MinimizedReason: n.MinimizedReason,
+			IsMinimized:     bool(n.IsMinimized),
+			MinimizedReason: string(n.MinimizedReason),
 		})
 	}
 
 	return &CommentsResult{
-		ViewerLogin:   result.Viewer.Login,
+		ViewerLogin:   string(query.Viewer.Login),
 		IssueComments: issueComments,
 		Reviews:       reviews,
 	}, nil
@@ -230,7 +203,7 @@ func (r *CommentsResult) FilterByID(id int64) *CommentsResult {
 func mapReactions(nodes []reactionNode) []format.Reaction {
 	reactions := make([]format.Reaction, len(nodes))
 	for i, n := range nodes {
-		reactions[i] = format.Reaction{Content: n.Content, Author: n.User.Login}
+		reactions[i] = format.Reaction{Content: string(n.Content), Author: string(n.User.Login)}
 	}
 	return reactions
 }
