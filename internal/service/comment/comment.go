@@ -7,7 +7,7 @@ import (
 	ghrest "github.com/google/go-github/v69/github"
 	"github.com/shurcooL/githubv4"
 
-	"github.com/ivanov-gv/gh-contribute/internal/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
 // Service provides comment operations — GraphQL for reads, REST for writes

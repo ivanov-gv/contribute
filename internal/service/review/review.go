@@ -7,7 +7,7 @@ import (
 
 	"github.com/shurcooL/githubv4"
 
-	"github.com/ivanov-gv/gh-contribute/internal/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
 // Service provides review detail operations via GraphQL

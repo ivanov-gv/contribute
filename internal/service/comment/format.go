@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/ivanov-gv/gh-contribute/internal/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
 // timelineEntry is a union type for sorting issue comments and reviews together

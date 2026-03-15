@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ivanov-gv/gh-contribute/internal/git"
+	"github.com/ivanov-gv/gh-contribute/internal/client/git"
 )
 
 func (a *app) newPRCmd() *cobra.Command {
