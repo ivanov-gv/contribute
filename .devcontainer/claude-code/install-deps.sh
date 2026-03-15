@@ -40,14 +40,6 @@ apt-get update
 apt-get install -y --no-install-recommends docker-ce-cli docker-compose-plugin
 apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ── Node.js ────────────────────────────────────────────────────────────────────
-# Required for Claude Code. Claude Code itself is installed later as the dev user
-# via `npm install -g`, using a user-owned npm global dir.
-NODE_VERSION="${NODE_VERSION:-20}"
-curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash -
-apt-get install -y --no-install-recommends nodejs
-apt-get clean && rm -rf /var/lib/apt/lists/*
-
 # ── git-delta ──────────────────────────────────────────────────────────────────
 # Improved diff viewer used by git.
 ARCH=$(dpkg --print-architecture)
