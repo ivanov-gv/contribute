@@ -22,29 +22,31 @@ func NewService(gql *githubv4.Client, owner, repo string) *Service {
 	return &Service{gql: gql, owner: owner, repo: repo}
 }
 
-// ReviewComment holds a single inline review comment
-// Note: CommitSHA/OriginalCommitSHA are intentionally absent — commit fields require
-// Contents:Read permission which is not in scope for this GitHub App.
+// ReviewComment holds a single comment within a review thread
 type ReviewComment struct {
-	DatabaseID        int64
-	Author            string
-	Body              string
-	CreatedAt         string
+	DatabaseID      int64
+	Author          string
+	Body            string
+	CreatedAt       string
+	ReplyToID       int64 // 0 if thread root
+	IsMinimized     bool
+	MinimizedReason string
+	Reactions       []format.Reaction
+}
+
+// ReviewThread holds a thread with its location info and all comments (across all reviews)
+type ReviewThread struct {
+	IsOutdated        bool
 	Path              string
 	Line              int
 	StartLine         int
 	OriginalLine      int
 	OriginalStartLine int
-	DiffHunk          string
-	ReplyToID         int64 // 0 if top-level
-	IsMinimized       bool
-	MinimizedReason   string
-	Outdated          bool
-	SubjectType       string // LINE or FILE
-	Reactions         []format.Reaction
+	DiffHunk          string // populated only when showDiff is true
+	Comments          []ReviewComment
 }
 
-// ReviewDetail holds the full review with its inline comments
+// ReviewDetail holds the full review with its threads
 type ReviewDetail struct {
 	DatabaseID  int64
 	Author      string
@@ -52,7 +54,7 @@ type ReviewDetail struct {
 	State       string
 	CreatedAt   string
 	ViewerLogin string
-	Comments    []ReviewComment
+	Threads     []ReviewThread
 	Reactions   []format.Reaction
 }
 
@@ -64,61 +66,9 @@ type reactionNode struct {
 	}
 }
 
-// reviewCommentNodeNoDiff - comment query shape without diffHunk
-// Note: commit/originalCommit fields require Contents:Read permission and are omitted.
-type reviewCommentNodeNoDiff struct {
-	DatabaseID int64
-	Author     struct {
-		Login githubv4.String
-	}
-	Body              githubv4.String
-	CreatedAt         githubv4.DateTime
-	Path              githubv4.String
-	Line              *githubv4.Int
-	StartLine         *githubv4.Int
-	OriginalLine      *githubv4.Int
-	OriginalStartLine *githubv4.Int
-	ReplyTo           *struct {
-		DatabaseID int64
-	}
-	IsMinimized     githubv4.Boolean
-	MinimizedReason githubv4.String
-	Outdated        githubv4.Boolean
-	SubjectType     githubv4.String
-	Reactions       struct {
-		Nodes []reactionNode
-	} `graphql:"reactions(first: 20)"`
-}
-
-// reviewCommentNodeWithDiff - comment query shape with diffHunk
-// Note: commit/originalCommit fields require Contents:Read permission and are omitted.
-type reviewCommentNodeWithDiff struct {
-	DatabaseID int64
-	Author     struct {
-		Login githubv4.String
-	}
-	Body              githubv4.String
-	CreatedAt         githubv4.DateTime
-	Path              githubv4.String
-	Line              *githubv4.Int
-	StartLine         *githubv4.Int
-	OriginalLine      *githubv4.Int
-	OriginalStartLine *githubv4.Int
-	DiffHunk          githubv4.String
-	ReplyTo           *struct {
-		DatabaseID int64
-	}
-	IsMinimized     githubv4.Boolean
-	MinimizedReason githubv4.String
-	Outdated        githubv4.Boolean
-	SubjectType     githubv4.String
-	Reactions       struct {
-		Nodes []reactionNode
-	} `graphql:"reactions(first: 20)"`
-}
-
-// reviewDetailNodeNoDiff - review node with no-diff comments
-type reviewDetailNodeNoDiff struct {
+// reviewMetaNode holds review-level metadata (author, body, state, reactions)
+// Thread contents are fetched separately via reviewThreads.
+type reviewMetaNode struct {
 	DatabaseID int64
 	Author     struct {
 		Login githubv4.String
@@ -129,32 +79,81 @@ type reviewDetailNodeNoDiff struct {
 	Reactions struct {
 		Nodes []reactionNode
 	} `graphql:"reactions(first: 20)"`
-	Comments struct {
-		Nodes []reviewCommentNodeNoDiff
-	} `graphql:"comments(first: 100)"`
 }
 
-// reviewDetailNodeWithDiff - review node with diff-included comments
-type reviewDetailNodeWithDiff struct {
+// threadCommentNodeNoDiff - a comment within a review thread, without diffHunk
+type threadCommentNodeNoDiff struct {
 	DatabaseID int64
 	Author     struct {
 		Login githubv4.String
 	}
-	Body      githubv4.String
-	State     githubv4.String
-	CreatedAt githubv4.DateTime
+	Body            githubv4.String
+	CreatedAt       githubv4.DateTime
+	IsMinimized     githubv4.Boolean
+	MinimizedReason githubv4.String
+	ReplyTo         *struct {
+		DatabaseID int64
+	}
+	PullRequestReview *struct {
+		DatabaseID int64
+	}
 	Reactions struct {
 		Nodes []reactionNode
 	} `graphql:"reactions(first: 20)"`
-	Comments struct {
-		Nodes []reviewCommentNodeWithDiff
-	} `graphql:"comments(first: 100)"`
+}
+
+// threadCommentNodeWithDiff - a comment within a review thread, with diffHunk
+type threadCommentNodeWithDiff struct {
+	DatabaseID int64
+	Author     struct {
+		Login githubv4.String
+	}
+	Body            githubv4.String
+	CreatedAt       githubv4.DateTime
+	IsMinimized     githubv4.Boolean
+	MinimizedReason githubv4.String
+	DiffHunk        githubv4.String
+	ReplyTo         *struct {
+		DatabaseID int64
+	}
+	PullRequestReview *struct {
+		DatabaseID int64
+	}
+	Reactions struct {
+		Nodes []reactionNode
+	} `graphql:"reactions(first: 20)"`
+}
+
+// reviewThreadNodeNoDiff - a review thread node without diffHunk
+type reviewThreadNodeNoDiff struct {
+	IsOutdated        githubv4.Boolean
+	Path              githubv4.String
+	Line              *githubv4.Int
+	StartLine         *githubv4.Int
+	OriginalLine      *githubv4.Int
+	OriginalStartLine *githubv4.Int
+	Comments          struct {
+		Nodes []threadCommentNodeNoDiff
+	} `graphql:"comments(first: 50)"`
+}
+
+// reviewThreadNodeWithDiff - a review thread node with diffHunk on each comment
+type reviewThreadNodeWithDiff struct {
+	IsOutdated        githubv4.Boolean
+	Path              githubv4.String
+	Line              *githubv4.Int
+	StartLine         *githubv4.Int
+	OriginalLine      *githubv4.Int
+	OriginalStartLine *githubv4.Int
+	Comments          struct {
+		Nodes []threadCommentNodeWithDiff
+	} `graphql:"comments(first: 50)"`
 }
 
 // We need to find the review by databaseId, but GraphQL doesn't support filtering by databaseId directly.
-// Instead, fetch all reviews and filter client-side.
+// Instead, fetch all reviews and threads and filter client-side.
 
-// allReviewsQueryNoDiff - top-level query without diffHunk
+// allReviewsQueryNoDiff fetches review metadata + all threads without diffHunk
 type allReviewsQueryNoDiff struct {
 	Viewer struct {
 		Login githubv4.String
@@ -162,13 +161,16 @@ type allReviewsQueryNoDiff struct {
 	Repository struct {
 		PullRequest struct {
 			Reviews struct {
-				Nodes []reviewDetailNodeNoDiff
+				Nodes []reviewMetaNode
 			} `graphql:"reviews(first: 100)"`
+			ReviewThreads struct {
+				Nodes []reviewThreadNodeNoDiff
+			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// allReviewsQueryWithDiff - top-level query including diffHunk
+// allReviewsQueryWithDiff fetches review metadata + all threads with diffHunk
 type allReviewsQueryWithDiff struct {
 	Viewer struct {
 		Login githubv4.String
@@ -176,14 +178,18 @@ type allReviewsQueryWithDiff struct {
 	Repository struct {
 		PullRequest struct {
 			Reviews struct {
-				Nodes []reviewDetailNodeWithDiff
+				Nodes []reviewMetaNode
 			} `graphql:"reviews(first: 100)"`
+			ReviewThreads struct {
+				Nodes []reviewThreadNodeWithDiff
+			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// Get returns the review detail with all inline comments.
-// When showDiff is true, diffHunk is fetched and included in each comment.
+// Get returns the review detail with all threads that contain at least one comment from the review.
+// Threads are fetched via reviewThreads to include cross-review replies.
+// When showDiff is true, diffHunk is fetched and included in the first thread comment.
 func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*ReviewDetail, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
@@ -196,40 +202,136 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*Rev
 		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
 		}
-		for _, n := range query.Repository.PullRequest.Reviews.Nodes {
-			if n.DatabaseID == reviewDatabaseID {
-				return mapReviewDetailWithDiff(&n, string(query.Viewer.Login)), nil
-			}
+		review := findReviewMeta(query.Repository.PullRequest.Reviews.Nodes, reviewDatabaseID)
+		if review == nil {
+			return nil, fmt.Errorf("review #%d not found in PR #%d", reviewDatabaseID, prNumber)
 		}
-	} else {
-		var query allReviewsQueryNoDiff
-		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
-		}
-		for _, n := range query.Repository.PullRequest.Reviews.Nodes {
-			if n.DatabaseID == reviewDatabaseID {
-				return mapReviewDetailNoDiff(&n, string(query.Viewer.Login)), nil
-			}
-		}
+		threads := collectThreadsWithDiff(query.Repository.PullRequest.ReviewThreads.Nodes, reviewDatabaseID)
+		return buildReviewDetail(review, string(query.Viewer.Login), threads), nil
 	}
 
-	return nil, fmt.Errorf("review #%d not found in PR #%d", reviewDatabaseID, prNumber)
+	var query allReviewsQueryNoDiff
+	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+		return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
+	}
+	review := findReviewMeta(query.Repository.PullRequest.Reviews.Nodes, reviewDatabaseID)
+	if review == nil {
+		return nil, fmt.Errorf("review #%d not found in PR #%d", reviewDatabaseID, prNumber)
+	}
+	threads := collectThreadsNoDiff(query.Repository.PullRequest.ReviewThreads.Nodes, reviewDatabaseID)
+	return buildReviewDetail(review, string(query.Viewer.Login), threads), nil
 }
 
-// mapCommentCore maps common comment fields plus an optional diffHunk into a ReviewComment
-func mapCommentCore(
+// findReviewMeta returns the review metadata node with the given database ID, or nil.
+func findReviewMeta(nodes []reviewMetaNode, reviewDatabaseID int64) *reviewMetaNode {
+	for i := range nodes {
+		if nodes[i].DatabaseID == reviewDatabaseID {
+			return &nodes[i]
+		}
+	}
+	return nil
+}
+
+// collectThreadsNoDiff returns threads (without diffHunk) that have at least one comment from the given review.
+func collectThreadsNoDiff(nodes []reviewThreadNodeNoDiff, reviewDatabaseID int64) []ReviewThread {
+	var threads []ReviewThread
+	for _, n := range nodes {
+		if !threadBelongsToReview(n.Comments.Nodes, reviewDatabaseID) {
+			continue
+		}
+		thread := ReviewThread{
+			IsOutdated: bool(n.IsOutdated),
+			Path:       string(n.Path),
+		}
+		setThreadLines(&thread, n.Line, n.StartLine, n.OriginalLine, n.OriginalStartLine)
+		for _, c := range n.Comments.Nodes {
+			thread.Comments = append(thread.Comments, mapThreadComment(
+				c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt,
+				c.IsMinimized, c.MinimizedReason, c.ReplyTo, c.Reactions.Nodes,
+			))
+		}
+		threads = append(threads, thread)
+	}
+	return sortedThreads(threads)
+}
+
+// collectThreadsWithDiff returns threads (with diffHunk from first comment) that belong to the review.
+func collectThreadsWithDiff(nodes []reviewThreadNodeWithDiff, reviewDatabaseID int64) []ReviewThread {
+	var threads []ReviewThread
+	for _, n := range nodes {
+		if !threadBelongsToReview(n.Comments.Nodes, reviewDatabaseID) {
+			continue
+		}
+		thread := ReviewThread{
+			IsOutdated: bool(n.IsOutdated),
+			Path:       string(n.Path),
+		}
+		setThreadLines(&thread, n.Line, n.StartLine, n.OriginalLine, n.OriginalStartLine)
+		// diffHunk is the same for all comments in a thread — take it from the first
+		if len(n.Comments.Nodes) > 0 {
+			thread.DiffHunk = string(n.Comments.Nodes[0].DiffHunk)
+		}
+		for _, c := range n.Comments.Nodes {
+			thread.Comments = append(thread.Comments, mapThreadComment(
+				c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt,
+				c.IsMinimized, c.MinimizedReason, c.ReplyTo, c.Reactions.Nodes,
+			))
+		}
+		threads = append(threads, thread)
+	}
+	return sortedThreads(threads)
+}
+
+// threadBelongsToReview checks whether any comment in the thread was posted in the given review.
+// Uses a generic constraint to work with both comment node types.
+func threadBelongsToReview[C interface {
+	getReviewID() int64
+}](nodes []C, reviewDatabaseID int64) bool {
+	for _, c := range nodes {
+		if c.getReviewID() == reviewDatabaseID {
+			return true
+		}
+	}
+	return false
+}
+
+func (c threadCommentNodeNoDiff) getReviewID() int64 {
+	if c.PullRequestReview == nil {
+		return 0
+	}
+	return c.PullRequestReview.DatabaseID
+}
+
+func (c threadCommentNodeWithDiff) getReviewID() int64 {
+	if c.PullRequestReview == nil {
+		return 0
+	}
+	return c.PullRequestReview.DatabaseID
+}
+
+func setThreadLines(t *ReviewThread, line, startLine, originalLine, originalStartLine *githubv4.Int) {
+	if line != nil {
+		t.Line = int(*line)
+	}
+	if startLine != nil {
+		t.StartLine = int(*startLine)
+	}
+	if originalLine != nil {
+		t.OriginalLine = int(*originalLine)
+	}
+	if originalStartLine != nil {
+		t.OriginalStartLine = int(*originalStartLine)
+	}
+}
+
+func mapThreadComment(
 	databaseID int64,
 	authorLogin githubv4.String,
 	body githubv4.String,
 	createdAt githubv4.DateTime,
-	path githubv4.String,
-	line, startLine, originalLine, originalStartLine *githubv4.Int,
-	diffHunk string,
-	replyTo *struct{ DatabaseID int64 },
 	isMinimized githubv4.Boolean,
 	minimizedReason githubv4.String,
-	outdated githubv4.Boolean,
-	subjectType githubv4.String,
+	replyTo *struct{ DatabaseID int64 },
 	reactions []reactionNode,
 ) ReviewComment {
 	rc := ReviewComment{
@@ -237,25 +339,9 @@ func mapCommentCore(
 		Author:          string(authorLogin),
 		Body:            string(body),
 		CreatedAt:       createdAt.UTC().Format("2006-01-02T15:04:05Z"),
-		Path:            string(path),
-		DiffHunk:        diffHunk,
 		IsMinimized:     bool(isMinimized),
 		MinimizedReason: string(minimizedReason),
-		Outdated:        bool(outdated),
-		SubjectType:     string(subjectType),
 		Reactions:       mapReactions(reactions),
-	}
-	if line != nil {
-		rc.Line = int(*line)
-	}
-	if startLine != nil {
-		rc.StartLine = int(*startLine)
-	}
-	if originalLine != nil {
-		rc.OriginalLine = int(*originalLine)
-	}
-	if originalStartLine != nil {
-		rc.OriginalStartLine = int(*originalStartLine)
 	}
 	if replyTo != nil {
 		rc.ReplyToID = replyTo.DatabaseID
@@ -263,70 +349,29 @@ func mapCommentCore(
 	return rc
 }
 
-func mapCommentNoDiff(c reviewCommentNodeNoDiff) ReviewComment {
-	return mapCommentCore(
-		c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt, c.Path,
-		c.Line, c.StartLine, c.OriginalLine, c.OriginalStartLine,
-		"", c.ReplyTo, c.IsMinimized, c.MinimizedReason, c.Outdated, c.SubjectType,
-		c.Reactions.Nodes,
-	)
-}
-
-func mapCommentWithDiff(c reviewCommentNodeWithDiff) ReviewComment {
-	return mapCommentCore(
-		c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt, c.Path,
-		c.Line, c.StartLine, c.OriginalLine, c.OriginalStartLine,
-		string(c.DiffHunk), c.ReplyTo, c.IsMinimized, c.MinimizedReason, c.Outdated, c.SubjectType,
-		c.Reactions.Nodes,
-	)
-}
-
-// buildReviewDetail assembles a ReviewDetail from already-mapped comments
-func buildReviewDetail(
-	databaseID int64,
-	authorLogin githubv4.String,
-	body githubv4.String,
-	state githubv4.String,
-	createdAt githubv4.DateTime,
-	viewerLogin string,
-	reactions []reactionNode,
-	comments []ReviewComment,
-) *ReviewDetail {
-	sort.Slice(comments, func(i, j int) bool {
-		return comments[i].CreatedAt < comments[j].CreatedAt
-	})
+// buildReviewDetail assembles a ReviewDetail from review metadata and pre-grouped threads.
+func buildReviewDetail(n *reviewMetaNode, viewerLogin string, threads []ReviewThread) *ReviewDetail {
 	return &ReviewDetail{
-		DatabaseID:  databaseID,
-		Author:      string(authorLogin),
-		Body:        string(body),
-		State:       string(state),
-		CreatedAt:   createdAt.UTC().Format("2006-01-02T15:04:05Z"),
+		DatabaseID:  n.DatabaseID,
+		Author:      string(n.Author.Login),
+		Body:        string(n.Body),
+		State:       string(n.State),
+		CreatedAt:   n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 		ViewerLogin: viewerLogin,
-		Reactions:   mapReactions(reactions),
-		Comments:    comments,
+		Reactions:   mapReactions(n.Reactions.Nodes),
+		Threads:     threads,
 	}
 }
 
-func mapReviewDetailNoDiff(n *reviewDetailNodeNoDiff, viewerLogin string) *ReviewDetail {
-	comments := make([]ReviewComment, len(n.Comments.Nodes))
-	for i, c := range n.Comments.Nodes {
-		comments[i] = mapCommentNoDiff(c)
-	}
-	return buildReviewDetail(
-		n.DatabaseID, n.Author.Login, n.Body, n.State, n.CreatedAt,
-		viewerLogin, n.Reactions.Nodes, comments,
-	)
-}
-
-func mapReviewDetailWithDiff(n *reviewDetailNodeWithDiff, viewerLogin string) *ReviewDetail {
-	comments := make([]ReviewComment, len(n.Comments.Nodes))
-	for i, c := range n.Comments.Nodes {
-		comments[i] = mapCommentWithDiff(c)
-	}
-	return buildReviewDetail(
-		n.DatabaseID, n.Author.Login, n.Body, n.State, n.CreatedAt,
-		viewerLogin, n.Reactions.Nodes, comments,
-	)
+// sortedThreads sorts threads by the creation time of their first comment.
+func sortedThreads(threads []ReviewThread) []ReviewThread {
+	sort.Slice(threads, func(i, j int) bool {
+		if len(threads[i].Comments) == 0 || len(threads[j].Comments) == 0 {
+			return false
+		}
+		return threads[i].Comments[0].CreatedAt < threads[j].Comments[0].CreatedAt
+	})
+	return threads
 }
 
 func mapReactions(nodes []reactionNode) []format.Reaction {
