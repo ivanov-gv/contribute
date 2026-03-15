@@ -1,0 +1,82 @@
+{
+  "name": "gh-contribute",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "TZ": "${localEnv:TZ:Europe/Berlin}",
+      "CLAUDE_CODE_VERSION": "latest",
+      "GIT_DELTA_VERSION": "0.18.2",
+      "ZSH_IN_DOCKER_VERSION": "1.2.0"
+    }
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    // Mount host Docker socket so Claude Code can run containers for testing.
+    // Containers are placed on an isolated per-devcontainer bridge network (see setup.sh).
+    "--mount=type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code",
+        "golang.go",
+        "eamodio.gitlens"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.profiles.linux": {
+          "zsh": { "path": "zsh" },
+          "bash": { "path": "bash", "icon": "terminal-bash" }
+        },
+        "go.toolsManagement.autoUpdate": true
+      }
+    }
+  },
+  "remoteUser": "dev",
+  "mounts": [
+    // Persist shell history across rebuilds
+    "source=gh-contribute-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+    // Share host Claude config — no manual re-auth needed inside the container.
+    // ~/.claude.json holds the OAuth token (global state); ~/.claude/ holds settings and credentials.
+    // Run `touch ~/.claude.json && mkdir -p ~/.claude` on the host if they don't exist yet.
+    "source=${localEnv:HOME}/.claude.json,target=/home/dev/.claude.json,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.claude,target=/home/dev/.claude,type=bind,consistency=cached",
+    // Share host gh-contribute token file — no manual re-auth needed inside the container.
+    // Run `mkdir -p ~/.config/gh-contribute` on the host if the directory doesn't exist yet.
+    "source=${localEnv:HOME}/.config/gh-contribute,target=/home/dev/.config/gh-contribute,type=bind,readonly,consistency=cached"
+  ],
+  "containerEnv": {
+    // Claude Code — ANTHROPIC_API_KEY alone is enough for headless/API-key auth.
+    // If you use OAuth (`claude auth login` on the host), the ~/.claude bind mount above
+    // carries the session into the container automatically.
+    "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
+    "NODE_OPTIONS": "--max-old-space-size=4096",
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+
+    // GitHub auth for gh-contribute.
+    // Priority (from config/token.go): GH_CONTRIBUTE_TOKEN env var → ~/.config/gh-contribute/token file.
+    // Set GH_CONTRIBUTE_TOKEN on the host for env-var auth, or run `gh-contribute auth login`
+    // on the host once — the token file is shared via the bind mount above.
+    "GH_CONTRIBUTE_TOKEN": "${localEnv:GH_CONTRIBUTE_TOKEN}",
+
+    // Standard GitHub tokens forwarded for gh CLI and any other tooling.
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+
+    // Docker network name for test containers — set by setup.sh on start.
+    // Use: docker run --network "$DOCKER_NETWORK" <image>
+    // Containers on this network can reach each other but are isolated from
+    // other devcontainers running on the same host Docker daemon.
+    "DOCKER_NETWORK": "gh-contribute-${devcontainerId}"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+
+  // setup.sh: creates the isolated Docker network, then locks down outbound traffic via iptables.
+  // Running with sudo because iptables and Docker network creation require root.
+  "postStartCommand": "sudo /usr/local/bin/setup.sh",
+  "waitFor": "postStartCommand"
+}
