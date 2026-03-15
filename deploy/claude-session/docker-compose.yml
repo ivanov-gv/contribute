@@ -19,7 +19,9 @@ services:
     stdin_open: true
     tty: true
     user: dev
-    command: /bin/zsh
+    # Run setup.sh (Docker network + firewall) before dropping into the shell.
+    # dev has passwordless sudo for setup.sh via /etc/sudoers.d/dev-scripts.
+    command: /bin/sh -c "sudo /usr/local/bin/setup.sh && exec /bin/zsh"
     environment:
       DEVCONTAINER: "false"
       # Forward auth tokens from the host environment.
