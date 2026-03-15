@@ -24,20 +24,24 @@ func NewService(gql *githubv4.Client, owner, repo string) *Service {
 
 // ReviewComment holds a single inline review comment
 type ReviewComment struct {
-	DatabaseID      int64
-	Author          string
-	Body            string
-	CreatedAt       string
-	Path            string
-	Line            int
-	StartLine       int
-	DiffHunk        string
-	ReplyToID       int64 // 0 if top-level
-	IsMinimized     bool
-	MinimizedReason string
-	Outdated        bool
-	SubjectType     string // LINE or FILE
-	Reactions       []format.Reaction
+	DatabaseID        int64
+	Author            string
+	Body              string
+	CreatedAt         string
+	Path              string
+	Line              int
+	StartLine         int
+	OriginalLine      int
+	OriginalStartLine int
+	CommitSHA         string
+	OriginalCommitSHA string
+	DiffHunk          string
+	ReplyToID         int64 // 0 if top-level
+	IsMinimized       bool
+	MinimizedReason   string
+	Outdated          bool
+	SubjectType       string // LINE or FILE
+	Reactions         []format.Reaction
 }
 
 // ReviewDetail holds the full review with its inline comments
@@ -60,19 +64,26 @@ type reactionNode struct {
 	}
 }
 
-// reviewCommentNode is a single inline review comment node
-type reviewCommentNode struct {
+// reviewCommentNodeNoDiff - comment query shape without diffHunk
+type reviewCommentNodeNoDiff struct {
 	DatabaseID githubv4.Int
 	Author     struct {
 		Login githubv4.String
 	}
-	Body            githubv4.String
-	CreatedAt       githubv4.DateTime
-	Path            githubv4.String
-	Line            *githubv4.Int
-	StartLine       *githubv4.Int
-	DiffHunk        githubv4.String
-	ReplyTo         *struct {
+	Body              githubv4.String
+	CreatedAt         githubv4.DateTime
+	Path              githubv4.String
+	Line              *githubv4.Int
+	StartLine         *githubv4.Int
+	OriginalLine      *githubv4.Int
+	OriginalStartLine *githubv4.Int
+	Commit            *struct {
+		OID githubv4.String `graphql:"oid"`
+	}
+	OriginalCommit *struct {
+		OID githubv4.String `graphql:"oid"`
+	}
+	ReplyTo *struct {
 		DatabaseID githubv4.Int
 	}
 	IsMinimized     githubv4.Boolean
@@ -84,8 +95,40 @@ type reviewCommentNode struct {
 	} `graphql:"reactions(first: 20)"`
 }
 
-// reviewDetailNode is a single review node with inline comments
-type reviewDetailNode struct {
+// reviewCommentNodeWithDiff - comment query shape with diffHunk
+type reviewCommentNodeWithDiff struct {
+	DatabaseID githubv4.Int
+	Author     struct {
+		Login githubv4.String
+	}
+	Body              githubv4.String
+	CreatedAt         githubv4.DateTime
+	Path              githubv4.String
+	Line              *githubv4.Int
+	StartLine         *githubv4.Int
+	OriginalLine      *githubv4.Int
+	OriginalStartLine *githubv4.Int
+	Commit            *struct {
+		OID githubv4.String `graphql:"oid"`
+	}
+	OriginalCommit *struct {
+		OID githubv4.String `graphql:"oid"`
+	}
+	DiffHunk githubv4.String
+	ReplyTo  *struct {
+		DatabaseID githubv4.Int
+	}
+	IsMinimized     githubv4.Boolean
+	MinimizedReason githubv4.String
+	Outdated        githubv4.Boolean
+	SubjectType     githubv4.String
+	Reactions       struct {
+		Nodes []reactionNode
+	} `graphql:"reactions(first: 20)"`
+}
+
+// reviewDetailNodeNoDiff - review node with no-diff comments
+type reviewDetailNodeNoDiff struct {
 	DatabaseID githubv4.Int
 	Author     struct {
 		Login githubv4.String
@@ -97,90 +140,217 @@ type reviewDetailNode struct {
 		Nodes []reactionNode
 	} `graphql:"reactions(first: 20)"`
 	Comments struct {
-		Nodes []reviewCommentNode
+		Nodes []reviewCommentNodeNoDiff
+	} `graphql:"comments(first: 100)"`
+}
+
+// reviewDetailNodeWithDiff - review node with diff-included comments
+type reviewDetailNodeWithDiff struct {
+	DatabaseID githubv4.Int
+	Author     struct {
+		Login githubv4.String
+	}
+	Body      githubv4.String
+	State     githubv4.String
+	CreatedAt githubv4.DateTime
+	Reactions struct {
+		Nodes []reactionNode
+	} `graphql:"reactions(first: 20)"`
+	Comments struct {
+		Nodes []reviewCommentNodeWithDiff
 	} `graphql:"comments(first: 100)"`
 }
 
 // We need to find the review by databaseId, but GraphQL doesn't support filtering by databaseId directly.
 // Instead, fetch all reviews and filter client-side.
 
-// allReviewsQuery defines the GraphQL query shape for fetching all reviews with inline comments
-type allReviewsQuery struct {
+// allReviewsQueryNoDiff - top-level query without diffHunk
+type allReviewsQueryNoDiff struct {
 	Viewer struct {
 		Login githubv4.String
 	}
 	Repository struct {
 		PullRequest struct {
 			Reviews struct {
-				Nodes []reviewDetailNode
+				Nodes []reviewDetailNodeNoDiff
 			} `graphql:"reviews(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// Get returns the review detail with all inline comments
-func (s *Service) Get(prNumber int, reviewDatabaseID int64) (*ReviewDetail, error) {
-	var query allReviewsQuery
+// allReviewsQueryWithDiff - top-level query including diffHunk
+type allReviewsQueryWithDiff struct {
+	Viewer struct {
+		Login githubv4.String
+	}
+	Repository struct {
+		PullRequest struct {
+			Reviews struct {
+				Nodes []reviewDetailNodeWithDiff
+			} `graphql:"reviews(first: 100)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// Get returns the review detail with all inline comments.
+// When showDiff is true, diffHunk is fetched and included in each comment.
+func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*ReviewDetail, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
 		"number": githubv4.Int(prNumber),
 	}
-	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-		return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
-	}
 
-	for _, n := range query.Repository.PullRequest.Reviews.Nodes {
-		if int64(n.DatabaseID) == reviewDatabaseID {
-			return mapReviewDetail(&n, string(query.Viewer.Login)), nil
+	if showDiff {
+		var query allReviewsQueryWithDiff
+		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
+		}
+		for _, n := range query.Repository.PullRequest.Reviews.Nodes {
+			if int64(n.DatabaseID) == reviewDatabaseID {
+				return mapReviewDetailWithDiff(&n, string(query.Viewer.Login)), nil
+			}
+		}
+	} else {
+		var query allReviewsQueryNoDiff
+		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
+		}
+		for _, n := range query.Repository.PullRequest.Reviews.Nodes {
+			if int64(n.DatabaseID) == reviewDatabaseID {
+				return mapReviewDetailNoDiff(&n, string(query.Viewer.Login)), nil
+			}
 		}
 	}
 
 	return nil, fmt.Errorf("review #%d not found in PR #%d", reviewDatabaseID, prNumber)
 }
 
-func mapReviewDetail(n *reviewDetailNode, viewerLogin string) *ReviewDetail {
-	detail := &ReviewDetail{
-		DatabaseID:  int64(n.DatabaseID),
-		Author:      string(n.Author.Login),
-		Body:        string(n.Body),
-		State:       string(n.State),
-		CreatedAt:   n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-		ViewerLogin: viewerLogin,
-		Reactions:   mapReactions(n.Reactions.Nodes),
+// mapCommentCore maps common comment fields plus an optional diffHunk into a ReviewComment
+func mapCommentCore(
+	databaseID githubv4.Int,
+	authorLogin githubv4.String,
+	body githubv4.String,
+	createdAt githubv4.DateTime,
+	path githubv4.String,
+	line, startLine, originalLine, originalStartLine *githubv4.Int,
+	commit *struct {
+		OID githubv4.String `graphql:"oid"`
+	},
+	originalCommit *struct {
+		OID githubv4.String `graphql:"oid"`
+	},
+	diffHunk string,
+	replyTo *struct{ DatabaseID githubv4.Int },
+	isMinimized githubv4.Boolean,
+	minimizedReason githubv4.String,
+	outdated githubv4.Boolean,
+	subjectType githubv4.String,
+	reactions []reactionNode,
+) ReviewComment {
+	rc := ReviewComment{
+		DatabaseID:      int64(databaseID),
+		Author:          string(authorLogin),
+		Body:            string(body),
+		CreatedAt:       createdAt.UTC().Format("2006-01-02T15:04:05Z"),
+		Path:            string(path),
+		DiffHunk:        diffHunk,
+		IsMinimized:     bool(isMinimized),
+		MinimizedReason: string(minimizedReason),
+		Outdated:        bool(outdated),
+		SubjectType:     string(subjectType),
+		Reactions:       mapReactions(reactions),
 	}
-
-	for _, c := range n.Comments.Nodes {
-		rc := ReviewComment{
-			DatabaseID:      int64(c.DatabaseID),
-			Author:          string(c.Author.Login),
-			Body:            string(c.Body),
-			CreatedAt:       c.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-			Path:            string(c.Path),
-			DiffHunk:        string(c.DiffHunk),
-			IsMinimized:     bool(c.IsMinimized),
-			MinimizedReason: string(c.MinimizedReason),
-			Outdated:        bool(c.Outdated),
-			SubjectType:     string(c.SubjectType),
-			Reactions:       mapReactions(c.Reactions.Nodes),
-		}
-		if c.Line != nil {
-			rc.Line = int(*c.Line)
-		}
-		if c.StartLine != nil {
-			rc.StartLine = int(*c.StartLine)
-		}
-		if c.ReplyTo != nil {
-			rc.ReplyToID = int64(c.ReplyTo.DatabaseID)
-		}
-		detail.Comments = append(detail.Comments, rc)
+	if line != nil {
+		rc.Line = int(*line)
 	}
+	if startLine != nil {
+		rc.StartLine = int(*startLine)
+	}
+	if originalLine != nil {
+		rc.OriginalLine = int(*originalLine)
+	}
+	if originalStartLine != nil {
+		rc.OriginalStartLine = int(*originalStartLine)
+	}
+	if commit != nil {
+		rc.CommitSHA = string(commit.OID)
+	}
+	if originalCommit != nil {
+		rc.OriginalCommitSHA = string(originalCommit.OID)
+	}
+	if replyTo != nil {
+		rc.ReplyToID = int64(replyTo.DatabaseID)
+	}
+	return rc
+}
 
-	sort.Slice(detail.Comments, func(i, j int) bool {
-		return detail.Comments[i].CreatedAt < detail.Comments[j].CreatedAt
+func mapCommentNoDiff(c reviewCommentNodeNoDiff) ReviewComment {
+	return mapCommentCore(
+		c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt, c.Path,
+		c.Line, c.StartLine, c.OriginalLine, c.OriginalStartLine,
+		c.Commit, c.OriginalCommit, "",
+		c.ReplyTo, c.IsMinimized, c.MinimizedReason, c.Outdated, c.SubjectType,
+		c.Reactions.Nodes,
+	)
+}
+
+func mapCommentWithDiff(c reviewCommentNodeWithDiff) ReviewComment {
+	return mapCommentCore(
+		c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt, c.Path,
+		c.Line, c.StartLine, c.OriginalLine, c.OriginalStartLine,
+		c.Commit, c.OriginalCommit, string(c.DiffHunk),
+		c.ReplyTo, c.IsMinimized, c.MinimizedReason, c.Outdated, c.SubjectType,
+		c.Reactions.Nodes,
+	)
+}
+
+// buildReviewDetail assembles a ReviewDetail from already-mapped comments
+func buildReviewDetail(
+	databaseID githubv4.Int,
+	authorLogin githubv4.String,
+	body githubv4.String,
+	state githubv4.String,
+	createdAt githubv4.DateTime,
+	viewerLogin string,
+	reactions []reactionNode,
+	comments []ReviewComment,
+) *ReviewDetail {
+	sort.Slice(comments, func(i, j int) bool {
+		return comments[i].CreatedAt < comments[j].CreatedAt
 	})
+	return &ReviewDetail{
+		DatabaseID:  int64(databaseID),
+		Author:      string(authorLogin),
+		Body:        string(body),
+		State:       string(state),
+		CreatedAt:   createdAt.UTC().Format("2006-01-02T15:04:05Z"),
+		ViewerLogin: viewerLogin,
+		Reactions:   mapReactions(reactions),
+		Comments:    comments,
+	}
+}
 
-	return detail
+func mapReviewDetailNoDiff(n *reviewDetailNodeNoDiff, viewerLogin string) *ReviewDetail {
+	comments := make([]ReviewComment, len(n.Comments.Nodes))
+	for i, c := range n.Comments.Nodes {
+		comments[i] = mapCommentNoDiff(c)
+	}
+	return buildReviewDetail(
+		n.DatabaseID, n.Author.Login, n.Body, n.State, n.CreatedAt,
+		viewerLogin, n.Reactions.Nodes, comments,
+	)
+}
+
+func mapReviewDetailWithDiff(n *reviewDetailNodeWithDiff, viewerLogin string) *ReviewDetail {
+	comments := make([]ReviewComment, len(n.Comments.Nodes))
+	for i, c := range n.Comments.Nodes {
+		comments[i] = mapCommentWithDiff(c)
+	}
+	return buildReviewDetail(
+		n.DatabaseID, n.Author.Login, n.Body, n.State, n.CreatedAt,
+		viewerLogin, n.Reactions.Nodes, comments,
+	)
 }
 
 func mapReactions(nodes []reactionNode) []format.Reaction {
