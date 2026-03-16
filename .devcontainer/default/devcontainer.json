@@ -1,0 +1,15 @@
+{
+  "name": "gh-contribute (default)",
+  "image": "golang:latest",
+  "customizations": {
+    "jetbrains": {
+      "backend": "GoLand"
+    }
+  },
+  "remoteUser": "root",
+  "containerEnv": {
+    "GOPATH": "/root/go",
+    "PATH": "${containerEnv:PATH}:/root/go/bin"
+  },
+  "postCreateCommand": "go install golang.org/x/tools/gopls@latest"
+}

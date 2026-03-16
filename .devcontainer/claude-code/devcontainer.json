@@ -1,0 +1,49 @@
+{
+  "name": "gh-contribute (claude-code)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "../..",
+    "args": {
+      "TZ": "${localEnv:TZ:Europe/Berlin}",
+      "GIT_DELTA_VERSION": "0.18.2",
+      "ZSH_IN_DOCKER_VERSION": "1.2.0"
+    }
+  },
+  "runArgs": [
+    "--cap-add=NET_ADMIN",
+    "--cap-add=NET_RAW",
+    // Mount the host Docker socket so Claude Code can run containers for testing.
+    // Containers are placed on an isolated per-devcontainer bridge network (see setup.sh).
+    "--mount=type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock"
+  ],
+  "customizations": {
+    "jetbrains": {
+      "backend": "GoLand"
+    }
+  },
+  "remoteUser": "dev",
+  "mounts": [
+    // Persist shell history across rebuilds
+    "source=gh-contribute-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
+  ],
+  "containerEnv": {
+    "DEVCONTAINER": "true",
+    "CLAUDE_CONFIG_DIR": "/home/dev/.claude",
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}",
+
+    "GH_CONTRIBUTE_TOKEN": "${localEnv:GH_CONTRIBUTE_TOKEN}",
+    "GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}",
+    "GH_TOKEN": "${localEnv:GH_TOKEN}",
+
+    "DOCKER_NETWORK": "gh-contribute-${devcontainerId}",
+
+    "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
+  "workspaceFolder": "/workspace",
+
+  // setup.sh: creates the isolated Docker network, then locks down outbound traffic via iptables.
+  // Running with sudo because iptables and Docker network creation require root.
+  "postStartCommand": "sudo /usr/local/bin/setup.sh",
+  "waitFor": "postStartCommand"
+}

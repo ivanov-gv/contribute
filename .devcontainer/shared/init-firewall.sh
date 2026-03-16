@@ -7,7 +7,6 @@
 # Allowed outbound:
 #   - GitHub (API, web, git, container registry)
 #   - Anthropic API (Claude)
-#   - npm registry
 #   - Go module proxy and checksum DB
 #   - Docker Hub and GHCR (pulling test images)
 #   - Sentry, Statsig, VS Code Marketplace (Claude Code internals)
@@ -38,9 +37,12 @@ else
     echo "No Docker DNS rules to restore"
 fi
 
-# 3. Baseline rules: DNS, SSH, localhost
+# 3. Baseline rules: DNS (UDP + TCP), SSH, localhost
+# DNS over TCP is used for large responses and DNSSEC — both transports are needed.
 iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
 iptables -A INPUT  -p udp --sport 53 -j ACCEPT
+iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+iptables -A INPUT  -p tcp --sport 53 -m state --state ESTABLISHED -j ACCEPT
 iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT
 iptables -A INPUT  -p tcp --sport 22 -m state --state ESTABLISHED -j ACCEPT
 iptables -A INPUT  -i lo -j ACCEPT
@@ -73,7 +75,6 @@ done < <(echo "$GH_META" | jq -r '(.web + .api + .git + .packages)[]' | aggregat
 # Resolve individual allowed domains
 for domain in \
     "api.anthropic.com" \
-    "registry.npmjs.org" \
     "proxy.golang.org" \
     "sum.golang.org" \
     "storage.googleapis.com" \
@@ -89,7 +90,8 @@ for domain in \
     "statsig.com" \
     "marketplace.visualstudio.com" \
     "vscode.blob.core.windows.net" \
-    "update.code.visualstudio.com"; do
+    "update.code.visualstudio.com" \
+    "golang.org"; do
     echo "Resolving $domain..."
     ips=$(dig +noall +answer A "$domain" | awk '$4 == "A" {print $5}')
     if [ -z "$ips" ]; then
