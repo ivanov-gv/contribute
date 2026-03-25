@@ -12,6 +12,7 @@ import (
 	ghclient "github.com/ivanov-gv/gh-contribute/internal/client/github"
 	"github.com/ivanov-gv/gh-contribute/internal/config"
 	"github.com/ivanov-gv/gh-contribute/internal/service/comment"
+	"github.com/ivanov-gv/gh-contribute/internal/service/issue"
 	"github.com/ivanov-gv/gh-contribute/internal/service/pr"
 	"github.com/ivanov-gv/gh-contribute/internal/service/reaction"
 	"github.com/ivanov-gv/gh-contribute/internal/service/review"
@@ -26,6 +27,7 @@ type app struct {
 	reactionService *reaction.Service
 	reviewService   *review.Service
 	threadService   *thread.Service
+	issueService    *issue.Service
 }
 
 // init loads config and initializes all services.
@@ -45,6 +47,7 @@ func (a *app) init() error {
 	a.reactionService = reaction.NewService(rest, cfg.Owner, cfg.Repo)
 	a.reviewService = review.NewService(gql, cfg.Owner, cfg.Repo)
 	a.threadService = thread.NewService(gql, cfg.Owner, cfg.Repo)
+	a.issueService = issue.NewService(gql, cfg.Owner, cfg.Repo)
 
 	return nil
 }
@@ -74,8 +77,13 @@ func Execute() {
 		_app.newCommentsCmd(),
 		_app.newCommentCmd(),
 		_app.newReactCmd(),
+		_app.newReplyCmd(),
+		_app.newResolveCmd(),
+		_app.newUnresolveCmd(),
 		_app.newReviewCmd(),
 		_app.newThreadCmd(),
+		_app.newIssueCmd(),
+		_app.newIssuesCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

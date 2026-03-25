@@ -179,6 +179,22 @@ func (s *Service) Post(prNumber int, body string) (*IssueComment, error) {
 	}, nil
 }
 
+// ReplyToReviewComment posts a reply to an existing review comment in-thread via REST API
+func (s *Service) ReplyToReviewComment(prNumber int, commentID int64, body string) (*IssueComment, error) {
+	comment, _, err := s.restClient.PullRequests.CreateCommentInReplyTo(
+		context.Background(), s.owner, s.repo, prNumber, body, commentID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("PullRequests.CreateCommentInReplyTo [pr=%d, comment=%d]: %w", prNumber, commentID, err)
+	}
+	return &IssueComment{
+		DatabaseID: comment.GetID(),
+		Author:     comment.GetUser().GetLogin(),
+		Body:       comment.GetBody(),
+		CreatedAt:  comment.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
+	}, nil
+}
+
 // FilterByID returns a CommentsResult containing only the comment or review with the given database ID
 func (r *CommentsResult) FilterByID(id int64) *CommentsResult {
 	for _, c := range r.IssueComments {

@@ -78,6 +78,7 @@ type threadCommentNode struct {
 
 // reviewThreadNode represents a single review thread with its comments
 type reviewThreadNode struct {
+	ID                githubv4.ID
 	IsOutdated        githubv4.Boolean
 	Path              githubv4.String
 	Line              *githubv4.Int
@@ -87,6 +88,24 @@ type reviewThreadNode struct {
 	Comments          struct {
 		Nodes []threadCommentNode
 	} `graphql:"comments(first: 50)"`
+}
+
+// resolveThreadMutation is the GraphQL mutation for resolving a review thread
+type resolveThreadMutation struct {
+	ResolveReviewThread struct {
+		Thread struct {
+			IsResolved githubv4.Boolean
+		}
+	} `graphql:"resolveReviewThread(input: $input)"`
+}
+
+// unresolveThreadMutation is the GraphQL mutation for unresolving a review thread
+type unresolveThreadMutation struct {
+	UnresolveReviewThread struct {
+		Thread struct {
+			IsResolved githubv4.Boolean
+		}
+	} `graphql:"unresolveReviewThread(input: $input)"`
 }
 
 // threadsQuery fetches all review threads for a PR
@@ -122,6 +141,65 @@ func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
 			continue
 		}
 		return buildThread(n, viewerLogin, threadID), nil
+	}
+
+	return nil, fmt.Errorf("thread #%d not found in PR #%d", threadID, prNumber)
+}
+
+// Resolve marks a review thread as resolved.
+// threadID is the database ID of the first comment in the thread.
+func (s *Service) Resolve(prNumber int, threadID int64) error {
+	nodeID, err := s.findThreadNodeID(prNumber, threadID)
+	if err != nil {
+		return err
+	}
+
+	var mutation resolveThreadMutation
+	input := githubv4.ResolveReviewThreadInput{
+		ThreadID: nodeID,
+	}
+	if err := s.gql.Mutate(context.Background(), &mutation, input, nil); err != nil {
+		return fmt.Errorf("gql.Mutate resolveReviewThread [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+	return nil
+}
+
+// Unresolve marks a review thread as unresolved.
+// threadID is the database ID of the first comment in the thread.
+func (s *Service) Unresolve(prNumber int, threadID int64) error {
+	nodeID, err := s.findThreadNodeID(prNumber, threadID)
+	if err != nil {
+		return err
+	}
+
+	var mutation unresolveThreadMutation
+	input := githubv4.UnresolveReviewThreadInput{
+		ThreadID: nodeID,
+	}
+	if err := s.gql.Mutate(context.Background(), &mutation, input, nil); err != nil {
+		return fmt.Errorf("gql.Mutate unresolveReviewThread [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+	return nil
+}
+
+// findThreadNodeID fetches all threads for a PR and returns the GraphQL node ID
+// of the thread whose first comment has the given database ID.
+func (s *Service) findThreadNodeID(prNumber int, threadID int64) (githubv4.ID, error) {
+	variables := map[string]interface{}{
+		"owner":  githubv4.String(s.owner),
+		"repo":   githubv4.String(s.repo),
+		"number": githubv4.Int(prNumber),
+	}
+
+	var query threadsQuery
+	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+		return nil, fmt.Errorf("gql.Query [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+
+	for _, n := range query.Repository.PullRequest.ReviewThreads.Nodes {
+		if len(n.Comments.Nodes) > 0 && n.Comments.Nodes[0].DatabaseID == threadID {
+			return n.ID, nil
+		}
 	}
 
 	return nil, fmt.Errorf("thread #%d not found in PR #%d", threadID, prNumber)
