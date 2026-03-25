@@ -33,3 +33,7 @@ go.work.sum
 
 
 github.sh
+
+# Build output
+gh-contribute
+bin/
