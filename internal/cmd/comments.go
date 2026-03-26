@@ -17,7 +17,7 @@ func (a *app) newCommentsCmd() *cobra.Command {
 			prNumber, _ := cmd.Flags().GetInt("pr")
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
-				return err
+				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
 			result, err := a.commentService.List(number)

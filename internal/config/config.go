@@ -55,8 +55,8 @@ func detectRepo() (string, string, error) {
 func parseRemoteURL(remote string) (string, string, error) {
 	// SSH: git@github.com:owner/repo.git
 	if strings.HasPrefix(remote, "git@") {
-		parts := strings.SplitN(remote, ":", 2)
-		if len(parts) != 2 {
+		parts := strings.SplitN(remote, ":", 2) //nolint:mnd // split into host:path
+		if len(parts) != 2 {                    //nolint:mnd // expect host and path
 			return "", "", fmt.Errorf("unexpected SSH remote format: %s", remote)
 		}
 		return parseOwnerRepo(parts[1])
@@ -66,8 +66,8 @@ func parseRemoteURL(remote string) (string, string, error) {
 	remote = strings.TrimPrefix(remote, "https://")
 	remote = strings.TrimPrefix(remote, "http://")
 	// remove host part
-	parts := strings.SplitN(remote, "/", 2)
-	if len(parts) != 2 {
+	parts := strings.SplitN(remote, "/", 2) //nolint:mnd // split into host/path
+	if len(parts) != 2 {                    //nolint:mnd // expect host and path
 		return "", "", fmt.Errorf("unexpected HTTPS remote format: %s", remote)
 	}
 	return parseOwnerRepo(parts[1])
@@ -85,7 +85,7 @@ func parseOwnerRepo(path string) (string, string, error) {
 			segments = append(segments, p)
 		}
 	}
-	if len(segments) < 2 {
+	if len(segments) < 2 { //nolint:mnd // need at least owner and repo
 		return "", "", fmt.Errorf("cannot parse owner/repo from: %s", path)
 	}
 	owner := segments[len(segments)-2]

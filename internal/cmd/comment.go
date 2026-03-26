@@ -19,7 +19,7 @@ func (a *app) newCommentCmd() *cobra.Command {
 			// resolve PR number
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
-				return err
+				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
 			created, err := a.commentService.Post(number, body)

@@ -59,12 +59,12 @@ func SaveToken(token string) error {
 	}
 
 	// create parent directories with restricted permissions
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil { //nolint:mnd // owner-only directory permissions
 		return fmt.Errorf("os.MkdirAll [dir='%s']: %w", filepath.Dir(path), err)
 	}
 
 	// write with owner-only permissions
-	if err := os.WriteFile(path, []byte(token), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(token), 0600); err != nil { //nolint:mnd // owner-only file permissions
 		return fmt.Errorf("os.WriteFile [path='%s']: %w", path, err)
 	}
 

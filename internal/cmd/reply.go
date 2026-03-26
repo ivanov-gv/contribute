@@ -13,7 +13,7 @@ func (a *app) newReplyCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "reply <comment-id> <body>",
 		Short: "Reply to a review comment in-thread",
-		Args:  cobra.ExactArgs(2),
+		Args:  cobra.ExactArgs(2), //nolint:mnd // cobra: <comment-id> <body>
 		RunE: func(cmd *cobra.Command, args []string) error {
 			commentID, err := strconv.ParseInt(args[0], 10, 64)
 			if err != nil {
@@ -24,7 +24,7 @@ func (a *app) newReplyCmd() *cobra.Command {
 			// resolve PR number
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
-				return err
+				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
 			created, err := a.commentService.ReplyToReviewComment(number, commentID, body)

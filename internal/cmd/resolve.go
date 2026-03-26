@@ -23,7 +23,7 @@ func (a *app) newResolveCmd() *cobra.Command {
 			// resolve PR number
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
-				return err
+				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
 			if err := a.threadService.Resolve(number, threadID); err != nil {
@@ -54,7 +54,7 @@ func (a *app) newUnresolveCmd() *cobra.Command {
 
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
-				return err
+				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
 			if err := a.threadService.Unresolve(number, threadID); err != nil {

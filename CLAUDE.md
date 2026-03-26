@@ -325,6 +325,33 @@ Use `mock.Anything` for arguments you don't care about in a particular test.
 Use `Benchmark<Name>(b *testing.B)` for performance-sensitive code. Document results in comments above the benchmark
 function for future reference.
 
+## Linting
+
+Run with: `golangci-lint run ./...`
+
+Configuration lives in `.golangci.yml`. The linter config must **not** contain global exceptions, ignored rules, or
+suppression lists. All linter rules apply everywhere.
+
+### Handling false positives
+
+When a linter reports a false positive, suppress it at the exact line with a `//nolint` comment that specifies the
+linter name and explains why:
+
+```go
+interval = 5 * time.Second //nolint:mnd // RFC 8628 §3.5 default polling interval
+```
+
+Rules:
+- Always specify the linter name: `//nolint:mnd`, never bare `//nolint`.
+- Always add a `//` comment after the directive explaining **why** it is a false positive.
+- Never add global exceptions to `.golangci.yml` — each suppression must be local and justified.
+- Fix the issue instead of suppressing whenever possible.
+
+### Pay attention to linter output
+
+Before committing, run `golangci-lint run ./...` and fix every issue. The CI pipeline runs the same linter and will
+block merges on violations.
+
 ## Documentation
 
 ### README.md (for humans)

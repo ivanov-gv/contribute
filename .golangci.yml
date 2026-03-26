@@ -27,18 +27,6 @@ linters:
     gocritic:
       disabled-checks:
         - ifElseChain   # we use guard clauses
-    mnd:
-      ignored-numbers:
-        - '0600'
-        - '0700'
-        - '2'
-        - '5'
-        - '20'
-      ignored-functions:
-        - 'cobra.ExactArgs'
-        - 'cobra.MaximumNArgs'
-        - 'cobra.MinimumNArgs'
-        - 'strings.SplitN'
 
 formatters:
   enable:

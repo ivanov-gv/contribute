@@ -58,6 +58,6 @@ func (a *app) newIssuesCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&labelFlag, "label", "", "Filter by label (comma-separated for multiple)")
-	cmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of issues to return")
+	cmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of issues to return") //nolint:mnd // CLI default page size
 	return cmd
 }

@@ -19,7 +19,7 @@ func (a *app) newReactCmd() *cobra.Command {
 			"Add a reaction to a PR comment.\nValid reactions: %v\nComment types: review (default), issue",
 			reaction.ValidReactions,
 		),
-		Args: cobra.ExactArgs(2),
+		Args: cobra.ExactArgs(2), //nolint:mnd // cobra: <comment-id> <reaction>
 		RunE: func(cmd *cobra.Command, args []string) error {
 			commentID, err := strconv.ParseInt(args[0], 10, 64)
 			if err != nil {

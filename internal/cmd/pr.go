@@ -26,7 +26,7 @@ func (a *app) newPRCmd() *cobra.Command {
 
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
-				return err
+				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
 			info, err := a.prService.Get(number)
