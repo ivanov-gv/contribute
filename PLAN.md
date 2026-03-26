@@ -62,21 +62,68 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 - Steps: checkout → Go setup → `make lint` → `make test` → `make build`
 - Cache Go modules
 
-### 1.6 E2E tests against a private test repo
+### 1.6 E2E tests against PR #1 in ivanov-gv/gh-contribute
+
 **Why**: Real API calls catch serialization bugs, permission issues, and GraphQL schema changes.
-**What**:
-- Create `test/` directory with integration tests
-- Use a dedicated test repo (e.g., `ivanov-gv/gh-contribute-test`) with a stable test PR
-- Tests authenticate via `GH_CONTRIBUTE_TOKEN` env var
-- Test matrix:
-  - `pr` — fetch PR details, verify fields
-  - `comments` — list comments, verify structure
-  - `comment` — post a comment, verify it appears, clean up
-  - `react` — add a reaction, verify it appears
-  - `review` — fetch review details with inline comments
-  - `thread` — fetch thread across reviews
-- Run in CI with a repository secret for the token
-- Guard with build tag `//go:build integration` so `make test` skips them
+**Test data**: PR #1 is a stable, locked PR with known expected outputs stored in `test/ivanov-gv.gh-contribute.pr#1/`.
+**Auth**: Tests authenticate via `GH_CONTRIBUTE_TOKEN` env var.
+**Guard**: `//go:build integration` so `make test` skips them. Run with: `go test -tags integration -count=1 -race ./test/...`
+
+**File naming convention**:
+- `pr-description.md` → expected output of `gh-contribute pr 1`
+- `comments.md` / `comments-unhidden.md` → expected output of `gh-contribute comments --pr 1` (default / `--show-hidden`)
+- `N-comments-ID.md` / `N-comments-ID-unhidden.md` → expected output of `gh-contribute comments ID --pr 1`
+- `N-review-ID.md` / `N-review-ID-unhidden.md` → expected output of `gh-contribute review ID --pr 1`
+- `thread-ID.md` / `thread-ID-unhidden.md` → expected output of `gh-contribute thread ID --pr 1`
+
+**Test cases** (each compares CLI stdout to the corresponding `.md` file):
+
+| # | Command | Expected output file | What it tests |
+|---|---------|---------------------|---------------|
+| 1 | `pr 1` | `pr-description.md` | PR metadata: title, state, reviewers, labels, linked issues, conversation count |
+| 2 | `comments --pr 1` | `comments.md` | Full timeline with hidden items collapsed, reactions, "by you" tracking |
+| 3 | `comments --pr 1 --show-hidden` | `comments-unhidden.md` | Full timeline with all hidden items expanded (dates, bodies, reactions) |
+| 4 | `comments 4038597073 --pr 1` | `1-comments-4038597073.md` | Single hidden/resolved issue comment |
+| 5 | `comments 4038597073 --pr 1 --show-hidden` | `1-comments-4038597073-unhidden.md` | Same comment with hidden content shown |
+| 6 | `comments 4038819817 --pr 1` | `2-comments-4038819817.md` | Comment by viewer ("you"), resolved |
+| 7 | `comments 4039221478 --pr 1` | `6-comments-4039221478.md` | Unresolved comment with markdown body |
+| 8 | `comments 4039593663 --pr 1` | `8-comments-4039593663.md` | Comment with markdown list |
+| 9 | `comments 4041153603 --pr 1` | `10-comments-4041153603.md` | Comment with markdown headings and lists |
+| 10 | `comments 4042410800 --pr 1` | `11-comments-4042410800.md` | Comment with eyes emoji reaction |
+| 11 | `comments 4067633036 --pr 1` | `12-comments-4067633036.md` | Comment by viewer, no reactions |
+| 12 | `review 3929204495 --pr 1` | `3-review-3929204495.md` | Hidden/resolved review with 2 threads (1 unresolved, 1 resolved) |
+| 13 | `review 3929204495 --pr 1 --show-hidden` | `3-review-3929204495-unhidden.md` | Same review with hidden thread content |
+| 14 | `review 3929240428 --pr 1` | `3-3.2.1-review-3929240428.md` | Review with reply-only thread (no description), resolved thread |
+| 15 | `review 3929240428 --pr 1 --show-hidden` | `3-3.2.1-review-3929240428-unhidden.md` | Same with hidden reply expanded |
+| 16 | `review 3929353771 --pr 1` | `4-review-3929353771.md` | Resolved review with confused emoji |
+| 17 | `review 3929353771 --pr 1 --show-hidden` | `4-review-3929353771-unhidden.md` | Same with hidden resolved comment |
+| 18 | `review 3929758963 --pr 1` | `7-review-3929758963.md` | Large review with code blocks, reactions, long markdown |
+| 19 | `review 3930039277 --pr 1` | `9-review-3930039277.md` | Review with 3 comments: 1 own thread + 2 cross-review replies |
+| 20 | `review 3930039277 --pr 1 --show-hidden` | `9-review-3930039277-unhidden.md` | Same with all content |
+| 21 | `thread 2918002761 --pr 1` | `thread-2918002761.md` | Single-comment unresolved thread |
+| 22 | `thread 2918002761 --pr 1 --show-hidden` | `thread-2918002761-unhidden.md` | Same (no hidden content, should match) |
+| 23 | `thread 2918006660 --pr 1` | `thread-2918006660.md` | Resolved thread with reply from different review |
+| 24 | `thread 2918006660 --pr 1 --show-hidden` | `thread-2918006660-unhidden.md` | Same with hidden resolved reply expanded |
+
+**Test structure** (`test/e2e_test.go`):
+```go
+//go:build integration
+
+func TestE2E(t *testing.T) {
+    // build binary once
+    // for each test case:
+    //   t.Run(name, func(t *testing.T) {
+    //     run command, capture stdout
+    //     read expected file
+    //     assert.Equal(t, expected, actual)
+    //   })
+}
+```
+
+**Notes**:
+- The `-unhidden` variant tests `--show-hidden` flag behavior
+- PR #1 is locked so comments/reactions won't change
+- Tests verify exact string match — any formatting change breaks a test, which is the point
 
 ---
 
