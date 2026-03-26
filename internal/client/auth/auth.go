@@ -22,6 +22,9 @@ const (
 
 	// githubTokenURL is the endpoint polled to exchange a device code for an access token.
 	githubTokenURL = "https://github.com/login/oauth/access_token"
+
+	// deviceFlowPollInterval is the default/increment polling interval per RFC 8628 §3.5.
+	deviceFlowPollInterval = 5 * time.Second
 )
 
 // RunDeviceFlow executes the GitHub App Device Authorization Flow (RFC 8628)
@@ -118,7 +121,7 @@ func pollForToken(codeResp deviceCodeResponse) (string, error) {
 	interval := time.Duration(codeResp.Interval) * time.Second
 	if interval == 0 {
 		// default per RFC 8628 §3.5
-		interval = 5 * time.Second //nolint:mnd // RFC 8628 §3.5 default polling interval
+		interval = deviceFlowPollInterval
 	}
 
 	deadline := time.Now().Add(time.Duration(codeResp.ExpiresIn) * time.Second)
@@ -145,7 +148,7 @@ func pollForToken(codeResp deviceCodeResponse) (string, error) {
 			// user hasn't approved yet — keep polling at current interval
 		case "slow_down":
 			// server requests slower polling — add 5s per RFC 8628 §3.5
-			interval += 5 * time.Second //nolint:mnd // RFC 8628 §3.5 slow_down increment
+			interval += deviceFlowPollInterval
 		case "expired_token":
 			return "", fmt.Errorf("device code expired — please run 'gh contribute auth login' again")
 		case "access_denied":

@@ -19,6 +19,12 @@ const (
 
 	// tokenConfigPath is the token file path relative to the user's home directory.
 	tokenConfigPath = ".config/gh-contribute/token"
+
+	// configDirPermissions is the permission mode for the config directory (owner-only access).
+	configDirPermissions = 0700
+
+	// tokenFilePermissions is the permission mode for the token file (owner-only read/write).
+	tokenFilePermissions = 0600
 )
 
 // LoadToken returns the GitHub App user access token.
@@ -59,12 +65,12 @@ func SaveToken(token string) error {
 	}
 
 	// create parent directories with restricted permissions
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil { //nolint:mnd // owner-only directory permissions
+	if err := os.MkdirAll(filepath.Dir(path), configDirPermissions); err != nil {
 		return fmt.Errorf("os.MkdirAll [dir='%s']: %w", filepath.Dir(path), err)
 	}
 
 	// write with owner-only permissions
-	if err := os.WriteFile(path, []byte(token), 0600); err != nil { //nolint:mnd // owner-only file permissions
+	if err := os.WriteFile(path, []byte(token), tokenFilePermissions); err != nil {
 		return fmt.Errorf("os.WriteFile [path='%s']: %w", path, err)
 	}
 

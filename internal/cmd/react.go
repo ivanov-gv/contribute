@@ -9,6 +9,8 @@ import (
 	"github.com/ivanov-gv/gh-contribute/internal/service/reaction"
 )
 
+const reactArgCount = 2 // <comment-id> <reaction>
+
 func (a *app) newReactCmd() *cobra.Command {
 	var commentType string
 
@@ -19,7 +21,7 @@ func (a *app) newReactCmd() *cobra.Command {
 			"Add a reaction to a PR comment.\nValid reactions: %v\nComment types: review (default), issue",
 			reaction.ValidReactions,
 		),
-		Args: cobra.ExactArgs(2), //nolint:mnd // cobra: <comment-id> <reaction>
+		Args: cobra.ExactArgs(reactArgCount),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			commentID, err := strconv.ParseInt(args[0], 10, 64)
 			if err != nil {

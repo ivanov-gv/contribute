@@ -332,13 +332,36 @@ Run with: `golangci-lint run ./...`
 Configuration lives in `.golangci.yml`. The linter config must **not** contain global exceptions, ignored rules, or
 suppression lists. All linter rules apply everywhere.
 
-### Handling false positives
+### Magic numbers (`mnd` linter)
+
+The `mnd` linter flags numeric literals. The correct fix depends on whether the number has domain meaning:
+
+**Use a named constant** when the number has domain/business meaning — it represents a chosen value that someone might
+need to find, understand, or change:
+```go
+const deviceFlowPollInterval = 5 * time.Second // RFC 8628 §3.5
+const configDirPermissions = 0700               // owner-only access
+const defaultPageSize = 20
+const replyArgCount = 2 // <comment-id> <body>
+```
+
+**Use `//nolint:mnd`** only when the number is purely structural and has no meaning beyond the syntax — e.g. split
+counts, slice index bounds, or length checks that mirror the split:
+```go
+parts := strings.SplitN(remote, ":", 2) //nolint:mnd // split into host:path
+if len(parts) != 2 {                    //nolint:mnd // expect host and path
+```
+
+Rule of thumb: if you can give the number a meaningful name, make it a constant. If the only name you can think of is
+`two` or `splitCount`, use `//nolint:mnd`.
+
+### Handling other false positives
 
 When a linter reports a false positive, suppress it at the exact line with a `//nolint` comment that specifies the
 linter name and explains why:
 
 ```go
-interval = 5 * time.Second //nolint:mnd // RFC 8628 §3.5 default polling interval
+parts := strings.SplitN(remote, ":", 2) //nolint:mnd // split into host:path
 ```
 
 Rules:

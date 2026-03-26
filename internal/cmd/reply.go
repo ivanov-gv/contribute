@@ -7,13 +7,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const replyArgCount = 2 // <comment-id> <body>
+
 func (a *app) newReplyCmd() *cobra.Command {
 	var prNumber int
 
 	cmd := &cobra.Command{
 		Use:   "reply <comment-id> <body>",
 		Short: "Reply to a review comment in-thread",
-		Args:  cobra.ExactArgs(2), //nolint:mnd // cobra: <comment-id> <body>
+		Args:  cobra.ExactArgs(replyArgCount),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			commentID, err := strconv.ParseInt(args[0], 10, 64)
 			if err != nil {

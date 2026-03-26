@@ -34,6 +34,8 @@ func (a *app) newIssueCmd() *cobra.Command {
 	return cmd
 }
 
+const defaultIssueListLimit = 20
+
 func (a *app) newIssuesCmd() *cobra.Command {
 	var labelFlag string
 	var limit int
@@ -58,6 +60,6 @@ func (a *app) newIssuesCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVar(&labelFlag, "label", "", "Filter by label (comma-separated for multiple)")
-	cmd.Flags().IntVar(&limit, "limit", 20, "Maximum number of issues to return") //nolint:mnd // CLI default page size
+	cmd.Flags().IntVar(&limit, "limit", defaultIssueListLimit, "Maximum number of issues to return")
 	return cmd
 }
