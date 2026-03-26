@@ -151,7 +151,7 @@ func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
 func (s *Service) Resolve(prNumber int, threadID int64) error {
 	nodeID, err := s.findThreadNodeID(prNumber, threadID)
 	if err != nil {
-		return err
+		return fmt.Errorf("findThreadNodeID [pr=%d, thread=%d]: %w", prNumber, threadID, err)
 	}
 
 	var mutation resolveThreadMutation
@@ -169,7 +169,7 @@ func (s *Service) Resolve(prNumber int, threadID int64) error {
 func (s *Service) Unresolve(prNumber int, threadID int64) error {
 	nodeID, err := s.findThreadNodeID(prNumber, threadID)
 	if err != nil {
-		return err
+		return fmt.Errorf("findThreadNodeID [pr=%d, thread=%d]: %w", prNumber, threadID, err)
 	}
 
 	var mutation unresolveThreadMutation

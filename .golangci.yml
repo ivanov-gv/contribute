@@ -17,6 +17,7 @@ linters:
     - misspell        # spelling errors
     - gosec           # security issues
     - exhaustive      # missing enum switch cases
+    - mnd             # magic number detector
 
   settings:
     revive:
@@ -26,6 +27,18 @@ linters:
     gocritic:
       disabled-checks:
         - ifElseChain   # we use guard clauses
+    mnd:
+      ignored-numbers:
+        - '0600'
+        - '0700'
+        - '2'
+        - '5'
+        - '20'
+      ignored-functions:
+        - 'cobra.ExactArgs'
+        - 'cobra.MaximumNArgs'
+        - 'cobra.MinimumNArgs'
+        - 'strings.SplitN'
 
 formatters:
   enable:

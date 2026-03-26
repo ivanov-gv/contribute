@@ -196,10 +196,10 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 
 ### 5.1 Current auth model
 Currently: Device Flow → user access token → all API calls are "app[bot] on behalf of user".
-This is fine for human-triggered use, but for an autonomous agent with its own GitHub account, we need a different model.
+The agent needs its own identity — authenticating as a GitHub App, not on behalf of a user.
 
-### 5.2 GitHub App Installation Token auth
-**Why**: The agent should authenticate as itself, not on behalf of a user.
+### 5.2 Replace Device Flow with GitHub App Installation Token auth
+**Why**: The agent authenticates as itself with its own GitHub App account.
 **How**:
 1. Create a GitHub App for the agent (e.g., "claude-contributor")
 2. Install the App on target repositories
@@ -210,8 +210,8 @@ This is fine for human-triggered use, but for an autonomous agent with its own G
    - Use installation token for API calls
 
 **What changes**:
-- New auth mode: `--auth-mode app` (default stays `device` for backward compat)
-- New config: `GH_CONTRIBUTE_APP_ID`, `GH_CONTRIBUTE_PRIVATE_KEY` (path to PEM file or base64-encoded)
+- Remove Device Flow (`auth login` / `auth status`) entirely
+- New config env vars: `GH_CONTRIBUTE_APP_ID`, `GH_CONTRIBUTE_PRIVATE_KEY` (base64-encoded PEM) or `GH_CONTRIBUTE_PRIVATE_KEY_PATH` (file path)
 - New auth client: `internal/client/auth/app.go`
   - `GenerateJWT(appID int64, privateKey []byte) (string, error)`
   - `GetInstallationToken(jwt string, installationID int64) (string, error)`
@@ -228,23 +228,9 @@ This is fine for human-triggered use, but for an autonomous agent with its own G
 - Cache token, refresh 5 minutes before expiry
 - All services use the token provider instead of a raw string
 
-### 5.4 Dual auth support
-**What**: Support both auth modes simultaneously:
-```
-# User mode (existing)
-gh contribute auth login
-
-# App mode (new)
-export GH_CONTRIBUTE_APP_ID=12345
-export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/key.pem
-gh contribute auth status
-# → Authenticated as app: claude-contributor (installation on ivanov-gv/gh-contribute)
-```
-
 Config priority:
-1. `GH_CONTRIBUTE_TOKEN` env var (explicit token, any source)
-2. App credentials (`APP_ID` + `PRIVATE_KEY`) → generate installation token
-3. `~/.config/gh-contribute/token` file (Device Flow token)
+1. `GH_CONTRIBUTE_TOKEN` env var (explicit token override for CI)
+2. App credentials (`APP_ID` + `PRIVATE_KEY`) → generate installation token automatically
 
 ---
 
@@ -300,7 +286,7 @@ Config priority:
 | **P2** | 1.1 Extract shared types | S | Code quality |
 | **P2** | 1.6 E2E tests | M | API contract validation |
 | **P2** | 2.2-2.3 Inline comments, submit review | M | Advanced review features |
-| **P2** | 5.2-5.4 App auth | L | Independent bot identity |
+| **P2** | 5.2-5.3 App auth | L | Independent bot identity |
 | **P3** | 6.1-6.5 Production hardening | L | Scale and reliability |
 | **P3** | 4.2-4.3 Workflow skill | M | Full autonomy |
 | **P3** | 3.2-3.3 Issue comments, linking | S | Completes issue workflow |
