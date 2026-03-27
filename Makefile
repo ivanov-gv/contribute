@@ -19,9 +19,9 @@ install:
 test:
 	go test -count=1 -race ./internal/...
 
-## test-integration: run integration tests with race detector
+## test-integration: run integration tests with race detector (requires GH_CONTRIBUTE_TOKEN)
 test-integration:
-	go test -count=1 -race ./test/...
+	go test -tags integration -count=1 -race ./test/...
 
 ## lint: run golangci-lint
 lint:

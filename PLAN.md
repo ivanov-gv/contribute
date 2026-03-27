@@ -62,7 +62,7 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 - Steps: checkout → Go setup → `make lint` → `make test` → `make build`
 - Cache Go modules
 
-### 1.6 E2E tests against PR #1 in ivanov-gv/gh-contribute
+### 1.6 E2E tests against PR #1 in ivanov-gv/gh-contribute ✅
 
 **Why**: Real API calls catch serialization bugs, permission issues, and GraphQL schema changes.
 **Test data**: PR #1 is a stable, locked PR with known expected outputs stored in `test/ivanov-gv.gh-contribute.pr#1/`.
