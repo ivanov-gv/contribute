@@ -38,6 +38,7 @@ type ThreadComment struct {
 type Thread struct {
 	ThreadID          int64 // databaseId of the first comment
 	IsOutdated        bool
+	IsResolved        bool
 	Path              string
 	Line              int
 	StartLine         int
@@ -80,6 +81,7 @@ type threadCommentNode struct {
 type reviewThreadNode struct {
 	ID                githubv4.ID
 	IsOutdated        githubv4.Boolean
+	IsResolved        githubv4.Boolean
 	Path              githubv4.String
 	Line              *githubv4.Int
 	StartLine         *githubv4.Int
@@ -209,6 +211,7 @@ func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread
 	t := &Thread{
 		ThreadID:    threadID,
 		IsOutdated:  bool(n.IsOutdated),
+		IsResolved:  bool(n.IsResolved),
 		Path:        string(n.Path),
 		ViewerLogin: viewerLogin,
 	}

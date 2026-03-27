@@ -34,6 +34,10 @@ type Info struct {
 	Author       string
 	CommitCount  int
 	CommentCount int
+	IsLocked     bool
+	ChangedFiles int
+	Additions    int
+	Deletions    int
 	Reviewers    []string
 	Assignees    []string
 	Labels       []string
@@ -74,6 +78,11 @@ type prNode struct {
 	URL         githubv4.URI
 	HeadRefName githubv4.String
 	BaseRefName githubv4.String
+	Locked      githubv4.Boolean
+	ChangedFiles githubv4.Int
+	Additions   githubv4.Int
+	Deletions   githubv4.Int
+	TotalCommentsCount githubv4.Int
 	Author      struct {
 		Login githubv4.String
 	}
@@ -179,7 +188,11 @@ func mapPR(n *prNode) *Info {
 		Base:         string(n.BaseRefName),
 		Author:       string(n.Author.Login),
 		CommitCount:  int(n.Commits.TotalCount),
-		CommentCount: int(n.Comments.TotalCount) + int(n.Reviews.TotalCount),
+		CommentCount: int(n.TotalCommentsCount),
+		IsLocked:     bool(n.Locked),
+		ChangedFiles: int(n.ChangedFiles),
+		Additions:    int(n.Additions),
+		Deletions:    int(n.Deletions),
 	}
 
 	// reviewers

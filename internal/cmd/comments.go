@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -20,12 +21,14 @@ func (a *app) newCommentsCmd() *cobra.Command {
 				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
+			showHidden, _ := cmd.Flags().GetBool("show-hidden")
+
 			result, err := a.commentService.List(number)
 			if err != nil {
 				return fmt.Errorf("commentService.List [pr=%d]: %w", number, err)
 			}
 
-			// filter by comment ID if provided
+			// filter by comment ID if provided — single-item lookup always shows full content
 			if len(args) > 0 {
 				commentID, err := strconv.ParseInt(args[0], 10, 64)
 				if err != nil {
@@ -35,15 +38,18 @@ func (a *app) newCommentsCmd() *cobra.Command {
 				if filtered == nil {
 					return fmt.Errorf("comment #%d not found", commentID)
 				}
-				fmt.Print(filtered.Format())
+				// single-item: always show hidden, normalize to single trailing newline
+				output := filtered.Format(true)
+				fmt.Print(strings.TrimRight(output, "\n") + "\n")
 				return nil
 			}
 
-			fmt.Print(result.Format())
+			fmt.Print(result.Format(showHidden))
 			return nil
 		},
 	}
 
 	cmd.Flags().Int("pr", 0, "PR number (auto-detected from current branch if not set)")
+	cmd.Flags().Bool("show-hidden", false, "Show content of hidden/minimized comments")
 	return cmd
 }

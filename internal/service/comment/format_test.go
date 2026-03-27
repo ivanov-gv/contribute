@@ -38,7 +38,7 @@ func TestCommentsResult_Format(t *testing.T) {
 			},
 		}
 
-		output := result.Format()
+		output := result.Format(false)
 
 		// verify ordering: issue100 → review200 → issue300
 		pos100 := indexOf(output, "issue #100")
@@ -63,7 +63,7 @@ func TestCommentsResult_Format(t *testing.T) {
 			},
 		}
 
-		output := result.Format()
+		output := result.Format(false)
 		assert.Contains(t, output, "hidden: Spam")
 		assert.NotContains(t, output, "Buy stuff!")
 	})
@@ -82,9 +82,35 @@ func TestCommentsResult_Format(t *testing.T) {
 			},
 		}
 
-		output := result.Format()
+		output := result.Format(false)
 		assert.Contains(t, output, "hidden: Dismissed")
 		assert.NotContains(t, output, "Old review")
+	})
+
+	t.Run("hidden review via thread resolution shows as hidden", func(t *testing.T) {
+		result := &CommentsResult{
+			ViewerLogin: "alice",
+			Reviews: []Review{
+				{
+					DatabaseID:   200,
+					Author:       "bob",
+					Body:         "Resolved review",
+					State:        "COMMENTED",
+					CreatedAt:    "2026-03-11T10:00:00Z",
+					IsHidden:     true,
+					HiddenReason: "Resolved",
+				},
+			},
+		}
+
+		output := result.Format(false)
+		assert.Contains(t, output, "hidden: Resolved")
+		assert.NotContains(t, output, "Resolved review")
+
+		// with showHidden, body is visible
+		outputShown := result.Format(true)
+		assert.Contains(t, outputShown, "hidden: Resolved")
+		assert.Contains(t, outputShown, "Resolved review")
 	})
 
 	t.Run("viewer identified correctly", func(t *testing.T) {
@@ -100,7 +126,7 @@ func TestCommentsResult_Format(t *testing.T) {
 			},
 		}
 
-		output := result.Format()
+		output := result.Format(false)
 		assert.Contains(t, output, "you (@alice)")
 	})
 
@@ -119,7 +145,7 @@ func TestCommentsResult_Format(t *testing.T) {
 			},
 		}
 
-		output := result.Format()
+		output := result.Format(false)
 		assert.Contains(t, output, "comments: 3")
 	})
 
@@ -140,7 +166,7 @@ func TestCommentsResult_Format(t *testing.T) {
 			},
 		}
 
-		output := result.Format()
+		output := result.Format(false)
 		assert.Contains(t, output, "👍")
 		assert.Contains(t, output, "🚀")
 		assert.Contains(t, output, "reactions by you:")
@@ -148,7 +174,7 @@ func TestCommentsResult_Format(t *testing.T) {
 
 	t.Run("empty result", func(t *testing.T) {
 		result := &CommentsResult{ViewerLogin: "alice"}
-		output := result.Format()
+		output := result.Format(false)
 		assert.Equal(t, "", output)
 	})
 }

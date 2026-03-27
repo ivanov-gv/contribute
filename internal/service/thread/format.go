@@ -8,24 +8,34 @@ import (
 )
 
 // Format renders the thread as human-readable markdown.
-func (t *Thread) Format() string {
+// When showHidden is true, minimized comments show full content instead of header-only.
+func (t *Thread) Format(showHidden bool) string {
 	var b strings.Builder
 
+	// thread header with resolved marker when applicable
 	location := formatLocation(t)
-	b.WriteString(fmt.Sprintf("# thread #%d  %s  \n", t.ThreadID, location))
+	if t.IsResolved {
+		if showHidden {
+			b.WriteString(fmt.Sprintf("thread #%d  %s | hidden: Resolved  \n", t.ThreadID, location))
+		} else {
+			b.WriteString(fmt.Sprintf("thread #%d  %s | hidden: Resolved\n", t.ThreadID, location))
+		}
+	} else {
+		b.WriteString(fmt.Sprintf("thread #%d  %s  \n", t.ThreadID, location))
+	}
 	b.WriteString("\n")
 
 	for i, c := range t.Comments {
 		if i > 0 {
-			b.WriteString("\n\n---\n")
+			b.WriteString("\n---\n")
 		}
-		b.WriteString(formatThreadComment(c, t.ViewerLogin))
+		b.WriteString(formatThreadComment(c, t.ViewerLogin, showHidden))
 	}
 
 	return strings.TrimRight(b.String(), "\n") + "\n"
 }
 
-func formatThreadComment(c ThreadComment, viewerLogin string) string {
+func formatThreadComment(c ThreadComment, viewerLogin string, showHidden bool) string {
 	var b strings.Builder
 	authorDisplay := format.Author(c.Author, viewerLogin)
 
@@ -34,21 +44,35 @@ func formatThreadComment(c ThreadComment, viewerLogin string) string {
 		if reason == "" {
 			reason = "hidden"
 		}
-		b.WriteString(fmt.Sprintf("comment #%d by %s  review #%d | hidden: %s\n", c.DatabaseID, authorDisplay, c.ReviewDatabaseID, reason))
-		return b.String()
-	}
-
-	if c.ReplyToID == 0 {
-		b.WriteString(fmt.Sprintf("comment #%d by %s  review #%d  \n", c.DatabaseID, authorDisplay, c.ReviewDatabaseID))
+		if !showHidden {
+			// compact header-only for minimized comments — trailing spaces for markdown line break
+			if c.ReplyToID != 0 {
+				b.WriteString(fmt.Sprintf("reply #%d to #%d  by %s  review #%d | hidden: %s  \n", c.DatabaseID, c.ReplyToID, authorDisplay, c.ReviewDatabaseID, reason))
+			} else {
+				b.WriteString(fmt.Sprintf("comment #%d by %s  review #%d | hidden: %s  \n", c.DatabaseID, authorDisplay, c.ReviewDatabaseID, reason))
+			}
+			return b.String()
+		}
+		// full content with hidden marker in header
+		if c.ReplyToID != 0 {
+			b.WriteString(fmt.Sprintf("reply #%d to #%d  by %s  review #%d | hidden: %s  \n", c.DatabaseID, c.ReplyToID, authorDisplay, c.ReviewDatabaseID, reason))
+		} else {
+			b.WriteString(fmt.Sprintf("comment #%d by %s  review #%d | hidden: %s  \n", c.DatabaseID, authorDisplay, c.ReviewDatabaseID, reason))
+		}
 	} else {
-		b.WriteString(fmt.Sprintf("reply #%d to #%d  by %s  review #%d  \n", c.DatabaseID, c.ReplyToID, authorDisplay, c.ReviewDatabaseID))
+		if c.ReplyToID == 0 {
+			b.WriteString(fmt.Sprintf("comment #%d by %s  review #%d  \n", c.DatabaseID, authorDisplay, c.ReviewDatabaseID))
+		} else {
+			b.WriteString(fmt.Sprintf("reply #%d to #%d  by %s  review #%d  \n", c.DatabaseID, c.ReplyToID, authorDisplay, c.ReviewDatabaseID))
+		}
 	}
 
 	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(c.CreatedAt)))
 	b.WriteString("\n")
 
-	for _, line := range strings.Split(c.Body, "\n") {
-		b.WriteString(line + "\n")
+	commentBody := strings.TrimRight(strings.ReplaceAll(c.Body, "\r\n", "\n"), "\n")
+	for _, line := range strings.Split(commentBody, "\n") {
+		b.WriteString(">" + line + "\n")
 	}
 
 	if reactionsStr := format.Reactions(c.Reactions, viewerLogin); reactionsStr != "" {

@@ -41,6 +41,7 @@ type ReviewComment struct {
 type ReviewThreadGroup struct {
 	ThreadID          int64
 	IsOutdated        bool
+	IsResolved        bool
 	Path              string
 	Line              int
 	StartLine         int
@@ -52,14 +53,16 @@ type ReviewThreadGroup struct {
 
 // ReviewDetail holds the full review with its thread groups
 type ReviewDetail struct {
-	DatabaseID   int64
-	Author       string
-	Body         string
-	State        string
-	CreatedAt    string
-	ViewerLogin  string
-	Reactions    []format.Reaction
-	ThreadGroups []ReviewThreadGroup
+	DatabaseID      int64
+	Author          string
+	Body            string
+	State           string
+	CreatedAt       string
+	ViewerLogin     string
+	IsMinimized     bool
+	MinimizedReason string
+	Reactions       []format.Reaction
+	ThreadGroups    []ReviewThreadGroup
 }
 
 // reactionNode is a single reaction with content and author
@@ -76,10 +79,12 @@ type reviewMetaNode struct {
 	Author     struct {
 		Login githubv4.String
 	}
-	Body      githubv4.String
-	State     githubv4.String
-	CreatedAt githubv4.DateTime
-	Reactions struct {
+	Body            githubv4.String
+	State           githubv4.String
+	CreatedAt       githubv4.DateTime
+	IsMinimized     githubv4.Boolean
+	MinimizedReason githubv4.String
+	Reactions       struct {
 		Nodes []reactionNode
 	} `graphql:"reactions(first: 20)"`
 }
@@ -130,6 +135,7 @@ type threadCommentNodeWithDiff struct {
 // reviewThreadNodeNoDiff — a review thread without diffHunk on comments
 type reviewThreadNodeNoDiff struct {
 	IsOutdated        githubv4.Boolean
+	IsResolved        githubv4.Boolean
 	Path              githubv4.String
 	Line              *githubv4.Int
 	StartLine         *githubv4.Int
@@ -143,6 +149,7 @@ type reviewThreadNodeNoDiff struct {
 // reviewThreadNodeWithDiff — a review thread with diffHunk on comments
 type reviewThreadNodeWithDiff struct {
 	IsOutdated        githubv4.Boolean
+	IsResolved        githubv4.Boolean
 	Path              githubv4.String
 	Line              *githubv4.Int
 	StartLine         *githubv4.Int
@@ -267,7 +274,7 @@ func buildGroupNoDiff(n reviewThreadNodeNoDiff, reviewDatabaseID int64) (ReviewT
 		return ReviewThreadGroup{}, false
 	}
 
-	group := newThreadGroup(n.IsOutdated, n.Path, n.Line, n.StartLine, n.OriginalLine, n.OriginalStartLine, n.Comments.Nodes)
+	group := newThreadGroup(n.IsOutdated, n.IsResolved, n.Path, n.Line, n.StartLine, n.OriginalLine, n.OriginalStartLine, n.Comments.Nodes)
 	// build set of this review's comment IDs for external-reply detection
 	reviewIDs := commentIDSet(reviewComments)
 	for _, c := range reviewComments {
@@ -289,7 +296,7 @@ func buildGroupWithDiff(n reviewThreadNodeWithDiff, reviewDatabaseID int64) (Rev
 		return ReviewThreadGroup{}, false
 	}
 
-	group := newThreadGroup(n.IsOutdated, n.Path, n.Line, n.StartLine, n.OriginalLine, n.OriginalStartLine, n.Comments.Nodes)
+	group := newThreadGroup(n.IsOutdated, n.IsResolved, n.Path, n.Line, n.StartLine, n.OriginalLine, n.OriginalStartLine, n.Comments.Nodes)
 	// diffHunk is the same for all comments in a thread — take from first
 	if len(n.Comments.Nodes) > 0 {
 		group.DiffHunk = string(n.Comments.Nodes[0].DiffHunk)
@@ -307,12 +314,14 @@ func buildGroupWithDiff(n reviewThreadNodeWithDiff, reviewDatabaseID int64) (Rev
 // ThreadID is the database ID of the first comment in the full thread.
 func newThreadGroup[C interface{ getID() int64 }](
 	isOutdated githubv4.Boolean,
+	isResolved githubv4.Boolean,
 	path githubv4.String,
 	line, startLine, originalLine, originalStartLine *githubv4.Int,
 	allComments []C,
 ) ReviewThreadGroup {
 	g := ReviewThreadGroup{
 		IsOutdated: bool(isOutdated),
+		IsResolved: bool(isResolved),
 		Path:       string(path),
 	}
 	if len(allComments) > 0 {
@@ -375,14 +384,16 @@ func mapReviewComment(
 
 func buildReviewDetail(n *reviewMetaNode, viewerLogin string, groups []ReviewThreadGroup) *ReviewDetail {
 	return &ReviewDetail{
-		DatabaseID:   n.DatabaseID,
-		Author:       string(n.Author.Login),
-		Body:         string(n.Body),
-		State:        string(n.State),
-		CreatedAt:    n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-		ViewerLogin:  viewerLogin,
-		Reactions:    mapReactions(n.Reactions.Nodes),
-		ThreadGroups: groups,
+		DatabaseID:      n.DatabaseID,
+		Author:          string(n.Author.Login),
+		Body:            string(n.Body),
+		State:           string(n.State),
+		CreatedAt:       n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		ViewerLogin:     viewerLogin,
+		IsMinimized:     bool(n.IsMinimized),
+		MinimizedReason: string(n.MinimizedReason),
+		Reactions:       mapReactions(n.Reactions.Nodes),
+		ThreadGroups:    groups,
 	}
 }
 

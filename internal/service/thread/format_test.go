@@ -34,9 +34,9 @@ func TestThread_Format(t *testing.T) {
 			},
 		}
 
-		output := thread.Format()
+		output := thread.Format(false)
 
-		assert.Contains(t, output, "# thread #500")
+		assert.Contains(t, output, "thread #500")
 		assert.Contains(t, output, "main.go on line +42")
 		assert.Contains(t, output, "comment #500 by @bob  review #100")
 		assert.Contains(t, output, "Fix this line")
@@ -64,7 +64,7 @@ func TestThread_Format(t *testing.T) {
 			},
 		}
 
-		output := thread.Format()
+		output := thread.Format(false)
 		assert.Contains(t, output, "old.go on original lines 80 to 88 (outdated)")
 	})
 
@@ -86,7 +86,7 @@ func TestThread_Format(t *testing.T) {
 			},
 		}
 
-		output := thread.Format()
+		output := thread.Format(false)
 		assert.Contains(t, output, "hidden: Off topic")
 		assert.NotContains(t, output, "Buy stuff")
 	})
@@ -110,7 +110,7 @@ func TestThread_Format(t *testing.T) {
 			},
 		}
 
-		output := thread.Format()
+		output := thread.Format(false)
 		assert.Contains(t, output, "🚀")
 		assert.Contains(t, output, "reactions by you:")
 	})
@@ -122,8 +122,8 @@ func TestThread_Format(t *testing.T) {
 			ViewerLogin: "alice",
 		}
 
-		output := thread.Format()
-		assert.Contains(t, output, "# thread #500")
+		output := thread.Format(false)
+		assert.Contains(t, output, "thread #500")
 	})
 }
 

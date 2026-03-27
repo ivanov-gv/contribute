@@ -29,11 +29,13 @@ func (a *app) newThreadCmd() *cobra.Command {
 				return fmt.Errorf("threadService.Get [pr=%d, thread=%d]: %w", number, threadID, err)
 			}
 
-			fmt.Print(t.Format())
+			showHidden, _ := cmd.Flags().GetBool("show-hidden")
+			fmt.Print(t.Format(showHidden))
 			return nil
 		},
 	}
 
 	cmd.Flags().Int("pr", 0, "PR number (auto-detected from current branch if not set)")
+	cmd.Flags().Bool("show-hidden", false, "Show content of hidden/minimized comments")
 	return cmd
 }

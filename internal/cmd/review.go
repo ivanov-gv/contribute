@@ -26,18 +26,20 @@ func (a *app) newReviewCmd() *cobra.Command {
 			}
 
 			showDiff, _ := cmd.Flags().GetBool("diff")
+			showHidden, _ := cmd.Flags().GetBool("show-hidden")
 
 			detail, err := a.reviewService.Get(number, reviewID, showDiff)
 			if err != nil {
 				return fmt.Errorf("reviewService.Get [pr=%d, review=%d]: %w", number, reviewID, err)
 			}
 
-			fmt.Print(detail.Format(showDiff))
+			fmt.Print(detail.Format(showDiff, showHidden))
 			return nil
 		},
 	}
 
 	cmd.Flags().Int("pr", 0, "PR number (auto-detected from current branch if not set)")
 	cmd.Flags().Bool("diff", false, "Include diff hunk for each comment")
+	cmd.Flags().Bool("show-hidden", false, "Show content of resolved/minimized threads")
 	return cmd
 }

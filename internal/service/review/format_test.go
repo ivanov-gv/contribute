@@ -19,9 +19,9 @@ func TestReviewDetail_Format(t *testing.T) {
 			ViewerLogin: "alice",
 		}
 
-		output := detail.Format(false)
+		output := detail.Format(false, false)
 
-		assert.Contains(t, output, "# review #100 by @bob")
+		assert.Contains(t, output, "review #100 by @bob")
 		assert.Contains(t, output, "2026-03-14 11:13:03")
 		assert.Contains(t, output, "Needs changes")
 	})
@@ -36,7 +36,7 @@ func TestReviewDetail_Format(t *testing.T) {
 			ViewerLogin: "alice",
 		}
 
-		output := detail.Format(false)
+		output := detail.Format(false, false)
 		assert.Contains(t, output, "you (@alice)")
 	})
 
@@ -65,7 +65,7 @@ func TestReviewDetail_Format(t *testing.T) {
 			},
 		}
 
-		output := detail.Format(false)
+		output := detail.Format(false, false)
 		assert.Contains(t, output, "thread #500")
 		assert.Contains(t, output, "main.go on line +42")
 		assert.Contains(t, output, "comment #500 by @bob")
@@ -98,7 +98,7 @@ func TestReviewDetail_Format(t *testing.T) {
 			},
 		}
 
-		output := detail.Format(true)
+		output := detail.Format(true, false)
 		assert.Contains(t, output, "```diff")
 		assert.Contains(t, output, "-old")
 		assert.Contains(t, output, "+new")
@@ -124,7 +124,7 @@ func TestReviewDetail_Format(t *testing.T) {
 			},
 		}
 
-		output := detail.Format(false)
+		output := detail.Format(false, false)
 		assert.NotContains(t, output, "```diff")
 	})
 
@@ -154,7 +154,7 @@ func TestReviewDetail_Format(t *testing.T) {
 			},
 		}
 
-		output := detail.Format(false)
+		output := detail.Format(false, false)
 		assert.Contains(t, output, "not in this review")
 		assert.Contains(t, output, "reply #600 to #400")
 	})
@@ -185,7 +185,7 @@ func TestReviewDetail_Format(t *testing.T) {
 			},
 		}
 
-		output := detail.Format(false)
+		output := detail.Format(false, false)
 		assert.Contains(t, output, "hidden: Spam")
 		assert.NotContains(t, output, "Spam content")
 	})
@@ -203,7 +203,7 @@ func TestReviewDetail_Format(t *testing.T) {
 			},
 		}
 
-		output := detail.Format(false)
+		output := detail.Format(false, false)
 		assert.Contains(t, output, "👍")
 		assert.Contains(t, output, "reactions by you:")
 	})

@@ -45,6 +45,8 @@ type Review struct {
 	Reactions       []format.Reaction
 	IsMinimized     bool
 	MinimizedReason string
+	IsHidden        bool   // true when IsMinimized or all associated threads are resolved
+	HiddenReason    string // e.g. "Resolved"
 }
 
 // CommentsResult holds all comments and reviews for a PR
@@ -96,6 +98,21 @@ type reviewNode struct {
 	} `graphql:"reactions(first: 100)"`
 }
 
+// reviewThreadCommentNode holds minimal comment data for thread-level hidden detection
+type reviewThreadCommentNode struct {
+	PullRequestReview *struct {
+		DatabaseID int64
+	}
+}
+
+// reviewThreadSummaryNode holds thread-level resolution and associated comments
+type reviewThreadSummaryNode struct {
+	IsResolved githubv4.Boolean
+	Comments   struct {
+		Nodes []reviewThreadCommentNode
+	} `graphql:"comments(first: 50)"`
+}
+
 // commentsQuery defines the GraphQL query shape for listing all comments and reviews on a PR
 type commentsQuery struct {
 	Viewer struct {
@@ -109,6 +126,9 @@ type commentsQuery struct {
 			Reviews struct {
 				Nodes []reviewNode
 			} `graphql:"reviews(first: 100)"`
+			ReviewThreads struct {
+				Nodes []reviewThreadSummaryNode
+			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
@@ -140,9 +160,12 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 		})
 	}
 
+	// build map of review ID → whether all associated threads are resolved
+	allThreadsResolved := computeAllThreadsResolved(pr.ReviewThreads.Nodes)
+
 	var reviews []Review
 	for _, n := range pr.Reviews.Nodes {
-		reviews = append(reviews, Review{
+		r := Review{
 			DatabaseID:      n.DatabaseID,
 			Author:          string(n.Author.Login),
 			Body:            string(n.Body),
@@ -152,7 +175,19 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 			Reactions:       mapReactions(n.Reactions.Nodes),
 			IsMinimized:     bool(n.IsMinimized),
 			MinimizedReason: string(n.MinimizedReason),
-		})
+		}
+		// hidden detection: minimized by user OR all associated threads resolved
+		if r.IsMinimized {
+			r.IsHidden = true
+			r.HiddenReason = format.EnumLabel(r.MinimizedReason)
+			if r.HiddenReason == "" {
+				r.HiddenReason = "hidden"
+			}
+		} else if resolved, ok := allThreadsResolved[n.DatabaseID]; ok && resolved {
+			r.IsHidden = true
+			r.HiddenReason = "Resolved"
+		}
+		reviews = append(reviews, r)
 	}
 
 	return &CommentsResult{
@@ -214,6 +249,47 @@ func (r *CommentsResult) FilterByID(id int64) *CommentsResult {
 		}
 	}
 	return nil
+}
+
+// computeAllThreadsResolved returns a map from review database ID to whether ALL
+// threads where that review has the ROOT comment are resolved.
+// Only considers threads where the first comment belongs to the review.
+// A review with no root threads is not included in the map.
+func computeAllThreadsResolved(threads []reviewThreadSummaryNode) map[int64]bool {
+	type status struct {
+		hasRootThreads bool
+		allResolved    bool
+	}
+	reviewStatus := make(map[int64]*status)
+
+	for _, t := range threads {
+		if len(t.Comments.Nodes) == 0 {
+			continue
+		}
+		// only the review that owns the root comment (first in thread) counts
+		root := t.Comments.Nodes[0]
+		if root.PullRequestReview == nil {
+			continue
+		}
+		reviewID := root.PullRequestReview.DatabaseID
+		s, ok := reviewStatus[reviewID]
+		if !ok {
+			s = &status{allResolved: true}
+			reviewStatus[reviewID] = s
+		}
+		s.hasRootThreads = true
+		if !bool(t.IsResolved) {
+			s.allResolved = false
+		}
+	}
+
+	result := make(map[int64]bool)
+	for id, s := range reviewStatus {
+		if s.hasRootThreads {
+			result[id] = s.allResolved
+		}
+	}
+	return result
 }
 
 func mapReactions(nodes []reactionNode) []format.Reaction {

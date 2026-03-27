@@ -68,10 +68,15 @@ func Reactions(reactions []Reaction, viewerLogin string) string {
 		return ""
 	}
 
+	// preserve insertion order for deterministic output
 	counts := make(map[string]int)
+	var order []string
 	var byViewer []string
 	for _, r := range reactions {
 		emoji := ReactionEmoji(r.Content)
+		if counts[emoji] == 0 {
+			order = append(order, emoji)
+		}
 		counts[emoji]++
 		if IsViewer(r.Author, viewerLogin) {
 			byViewer = append(byViewer, emoji)
@@ -81,19 +86,23 @@ func Reactions(reactions []Reaction, viewerLogin string) string {
 	var b strings.Builder
 
 	var parts []string
-	for emoji, count := range counts {
-		parts = append(parts, fmt.Sprintf("%d %s", count, emoji))
+	for _, emoji := range order {
+		parts = append(parts, fmt.Sprintf("%d %s", counts[emoji], emoji))
 	}
 	b.WriteString(fmt.Sprintf("(%s)  \n", strings.Join(parts, " ")))
 
 	if len(byViewer) > 0 {
 		viewerCounts := make(map[string]int)
+		var viewerOrder []string
 		for _, e := range byViewer {
+			if viewerCounts[e] == 0 {
+				viewerOrder = append(viewerOrder, e)
+			}
 			viewerCounts[e]++
 		}
 		var viewerParts []string
-		for emoji, count := range viewerCounts {
-			viewerParts = append(viewerParts, fmt.Sprintf("%d %s", count, emoji))
+		for _, emoji := range viewerOrder {
+			viewerParts = append(viewerParts, fmt.Sprintf("%d %s", viewerCounts[emoji], emoji))
 		}
 		b.WriteString(fmt.Sprintf("reactions by you: (%s)  \n", strings.Join(viewerParts, " ")))
 	} else {
