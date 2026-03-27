@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -42,7 +43,7 @@ func Load() (*Config, error) {
 
 // detectRepo extracts owner/repo from the git remote "origin".
 func detectRepo() (string, string, error) {
-	out, err := exec.Command("git", "remote", "get-url", "origin").Output()
+	out, err := exec.CommandContext(context.Background(), "git", "remote", "get-url", "origin").Output()
 	if err != nil {
 		return "", "", fmt.Errorf("git remote get-url origin: %w", err)
 	}

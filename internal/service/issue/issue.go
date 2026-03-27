@@ -114,7 +114,7 @@ func (s *Service) Get(number int) (*Info, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(number),
+		"number": githubv4.Int(number), //nolint:gosec // issue numbers fit in int32
 	}
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [number=%d]: %w", number, err)
@@ -173,7 +173,7 @@ func (s *Service) List(limit int, labels []string) ([]ListItem, error) {
 	variables := map[string]interface{}{
 		"owner": githubv4.String(s.owner),
 		"repo":  githubv4.String(s.repo),
-		"limit": githubv4.Int(limit),
+		"limit": githubv4.Int(limit), //nolint:gosec // limits fit in int32
 	}
 
 	var nodes []issueListNode

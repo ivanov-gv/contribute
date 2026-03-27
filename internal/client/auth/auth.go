@@ -21,7 +21,7 @@ const (
 	githubDeviceCodeURL = "https://github.com/login/device/code"
 
 	// githubTokenURL is the endpoint polled to exchange a device code for an access token.
-	githubTokenURL = "https://github.com/login/oauth/access_token"
+	githubTokenURL = "https://github.com/login/oauth/access_token" //nolint:gosec // not a credential, it's a public GitHub OAuth endpoint URL
 
 	// deviceFlowPollInterval is the default/increment polling interval per RFC 8628 §3.5.
 	deviceFlowPollInterval = 5 * time.Second
@@ -79,7 +79,7 @@ type deviceCodeResponse struct {
 
 // requestDeviceCode POSTs to the device code endpoint and returns the parsed response.
 func requestDeviceCode() (deviceCodeResponse, error) {
-	req, err := http.NewRequest(http.MethodPost, githubDeviceCodeURL,
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, githubDeviceCodeURL,
 		strings.NewReader("client_id="+clientID))
 	if err != nil {
 		return deviceCodeResponse{}, fmt.Errorf("http.NewRequest: %w", err)
@@ -91,7 +91,7 @@ func requestDeviceCode() (deviceCodeResponse, error) {
 	if err != nil {
 		return deviceCodeResponse{}, fmt.Errorf("http.DefaultClient.Do: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // best-effort close on HTTP response body
 
 	if resp.StatusCode != http.StatusOK {
 		return deviceCodeResponse{}, fmt.Errorf("device code request returned status %d", resp.StatusCode)
@@ -164,7 +164,7 @@ func pollForToken(codeResp deviceCodeResponse) (string, error) {
 
 // requestToken sends a single polling request to the OAuth token endpoint.
 func requestToken(body string) (tokenPollResponse, error) {
-	req, err := http.NewRequest(http.MethodPost, githubTokenURL,
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, githubTokenURL,
 		strings.NewReader(body))
 	if err != nil {
 		return tokenPollResponse{}, fmt.Errorf("http.NewRequest: %w", err)
@@ -176,7 +176,7 @@ func requestToken(body string) (tokenPollResponse, error) {
 	if err != nil {
 		return tokenPollResponse{}, fmt.Errorf("http.DefaultClient.Do: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // best-effort close on HTTP response body
 
 	var result tokenPollResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {

@@ -20,7 +20,7 @@ const (
 	TokenEnv = "GH_CONTRIBUTE_TOKEN"
 
 	// tokenConfigPath is the token file path relative to the user's home directory.
-	tokenConfigPath = ".config/gh-contribute/token"
+	tokenConfigPath = ".config/gh-contribute/token" //nolint:gosec // not a credential, it's the path where the token is stored
 
 	// configDirPermissions is the permission mode for the config directory (owner-only access).
 	configDirPermissions = 0700
@@ -57,7 +57,7 @@ func loadTokenFromFile() (string, error) {
 		return "", fmt.Errorf("tokenFilePath: %w", err)
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // path is from tokenFilePath() which uses a constant relative to $HOME
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", ErrNotAuthenticated

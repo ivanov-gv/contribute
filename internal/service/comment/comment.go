@@ -85,7 +85,7 @@ type issueCommentNode struct {
 	CreatedAt       githubv4.DateTime
 	IsMinimized     githubv4.Boolean
 	MinimizedReason githubv4.String
-	Reactions struct {
+	Reactions       struct {
 		Nodes []graphql_model.ReactionNode
 	} `graphql:"reactions(first: 100)"`
 }
@@ -150,7 +150,7 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(prNumber),
+		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
 	}
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [pr=%d]: %w", prNumber, err)
@@ -341,4 +341,3 @@ func computeAllThreadsResolved(threads []reviewThreadSummaryNode) map[int64]bool
 	}
 	return result
 }
-

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/base64"
@@ -81,7 +82,7 @@ func loadPrivateKey() (*rsa.PrivateKey, error) {
 
 	// try file path
 	if path := os.Getenv("GH_CONTRIBUTE_PRIVATE_KEY_PATH"); path != "" {
-		pemBytes, err := os.ReadFile(path)
+		pemBytes, err := os.ReadFile(path) //nolint:gosec // path from trusted env var GH_CONTRIBUTE_PRIVATE_KEY_PATH
 		if err != nil {
 			return nil, fmt.Errorf("os.ReadFile [path='%s']: %w", path, err)
 		}
@@ -103,7 +104,7 @@ func parsePrivateKey(pemBytes []byte) (*rsa.PrivateKey, error) {
 		// try PKCS8 format
 		parsed, pkcs8Err := x509.ParsePKCS8PrivateKey(block.Bytes)
 		if pkcs8Err != nil {
-			return nil, fmt.Errorf("failed to parse private key (PKCS1: %w, PKCS8: %v)", err, pkcs8Err)
+			return nil, fmt.Errorf("failed to parse private key (PKCS1: %w, PKCS8: %w)", err, pkcs8Err)
 		}
 		rsaKey, ok := parsed.(*rsa.PrivateKey)
 		if !ok {
@@ -149,7 +150,7 @@ func GetInstallationToken(jwtToken string, installationID int64) (string, time.T
 	}
 
 	url := fmt.Sprintf("https://api.github.com/app/installations/%d/access_tokens", installationID)
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodPost, url, nil)
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("http.NewRequest: %w", err)
 	}
@@ -160,7 +161,7 @@ func GetInstallationToken(jwtToken string, installationID int64) (string, time.T
 	if err != nil {
 		return "", time.Time{}, fmt.Errorf("http.DefaultClient.Do: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // best-effort close on HTTP response body
 
 	if resp.StatusCode != http.StatusCreated {
 		return "", time.Time{}, fmt.Errorf("installation token request returned status %d", resp.StatusCode)
@@ -181,7 +182,7 @@ type installationNode struct {
 
 // findInstallation returns the first installation ID for the app
 func findInstallation(jwtToken string) (int64, error) {
-	req, err := http.NewRequest(http.MethodGet, githubInstallationsURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, githubInstallationsURL, nil)
 	if err != nil {
 		return 0, fmt.Errorf("http.NewRequest: %w", err)
 	}
@@ -192,7 +193,7 @@ func findInstallation(jwtToken string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("http.DefaultClient.Do: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck // best-effort close on HTTP response body
 
 	if resp.StatusCode != http.StatusOK {
 		return 0, fmt.Errorf("installations request returned status %d", resp.StatusCode)
@@ -224,4 +225,3 @@ func GetAppToken(cfg *AppConfig) (string, time.Time, error) {
 
 	return token, expiresAt, nil
 }
-

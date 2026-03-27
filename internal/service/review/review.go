@@ -82,7 +82,7 @@ type reviewMetaNode struct {
 	CreatedAt       githubv4.DateTime
 	IsMinimized     githubv4.Boolean
 	MinimizedReason githubv4.String
-	Reactions struct {
+	Reactions       struct {
 		Nodes []graphql_model.ReactionNode
 	} `graphql:"reactions(first: 20)"`
 }
@@ -103,7 +103,7 @@ type reviewThreadNodeNoDiff struct {
 	StartLine         *githubv4.Int
 	OriginalLine      *githubv4.Int
 	OriginalStartLine *githubv4.Int
-	Comments struct {
+	Comments          struct {
 		Nodes []graphql_model.ThreadCommentNode
 	} `graphql:"comments(first: 50)"`
 }
@@ -163,7 +163,7 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*Rev
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(prNumber),
+		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
 	}
 
 	if showDiff {
@@ -366,4 +366,3 @@ func sortedGroups(groups []ReviewThreadGroup) []ReviewThreadGroup {
 	})
 	return groups
 }
-

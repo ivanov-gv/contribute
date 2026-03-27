@@ -27,27 +27,27 @@ func NewService(gql graphQLQuerier, owner, repo string) *Service {
 
 // Info holds rich PR details from GraphQL
 type Info struct {
-	Number       int
-	Title        string
-	State        string
-	IsDraft      bool
-	Mergeable    string
-	Body         string
-	URL          string
-	Head         string
-	Base         string
-	Author       string
-	CommitCount  int
-	CommentCount int
-	IsLocked     bool
-	ChangedFiles int
-	Additions    int
-	Deletions    int
-	Reviewers    []string
-	Assignees    []string
-	Labels       []string
-	Projects     []string
-	Milestone    string
+	Number        int
+	Title         string
+	State         string
+	IsDraft       bool
+	Mergeable     string
+	Body          string
+	URL           string
+	Head          string
+	Base          string
+	Author        string
+	CommitCount   int
+	CommentCount  int
+	IsLocked      bool
+	ChangedFiles  int
+	Additions     int
+	Deletions     int
+	Reviewers     []string
+	Assignees     []string
+	Labels        []string
+	Projects      []string
+	Milestone     string
 	Issues        []LinkedIssue
 	HeadCommitSHA string
 }
@@ -75,22 +75,22 @@ type prReviewerNode struct {
 
 // prNode is the pull request shape returned by the query
 type prNode struct {
-	Number      githubv4.Int
-	Title       githubv4.String
-	State       githubv4.String
-	IsDraft     githubv4.Boolean
-	Mergeable   githubv4.String
-	Body        githubv4.String
-	URL         githubv4.URI
-	HeadRefName githubv4.String
-	HeadRefOid  githubv4.String
-	BaseRefName githubv4.String
-	Locked      githubv4.Boolean
-	ChangedFiles githubv4.Int
-	Additions   githubv4.Int
-	Deletions   githubv4.Int
+	Number             githubv4.Int
+	Title              githubv4.String
+	State              githubv4.String
+	IsDraft            githubv4.Boolean
+	Mergeable          githubv4.String
+	Body               githubv4.String
+	URL                githubv4.URI
+	HeadRefName        githubv4.String
+	HeadRefOid         githubv4.String
+	BaseRefName        githubv4.String
+	Locked             githubv4.Boolean
+	ChangedFiles       githubv4.Int
+	Additions          githubv4.Int
+	Deletions          githubv4.Int
 	TotalCommentsCount githubv4.Int
-	Author      struct {
+	Author             struct {
 		Login githubv4.String
 	}
 	Commits struct {
@@ -144,7 +144,7 @@ func (s *Service) Get(number int) (*Info, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(number),
+		"number": githubv4.Int(number), //nolint:gosec // PR numbers fit in int32
 	}
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [number=%d]: %w", number, err)
@@ -184,23 +184,23 @@ func (s *Service) FindByBranch(branch string) (int, error) {
 // mapPR converts the GraphQL response to our Info type
 func mapPR(n *prNode) *Info {
 	info := &Info{
-		Number:       int(n.Number),
-		Title:        string(n.Title),
-		State:        strings.ToLower(string(n.State)),
-		IsDraft:      bool(n.IsDraft),
-		Mergeable:    string(n.Mergeable),
-		Body:         string(n.Body),
-		URL:          n.URL.String(),
-		Head:         string(n.HeadRefName),
-		Base:         string(n.BaseRefName),
-		Author:       string(n.Author.Login),
+		Number:        int(n.Number),
+		Title:         string(n.Title),
+		State:         strings.ToLower(string(n.State)),
+		IsDraft:       bool(n.IsDraft),
+		Mergeable:     string(n.Mergeable),
+		Body:          string(n.Body),
+		URL:           n.URL.String(),
+		Head:          string(n.HeadRefName),
+		Base:          string(n.BaseRefName),
+		Author:        string(n.Author.Login),
 		CommitCount:   int(n.Commits.TotalCount),
 		CommentCount:  int(n.TotalCommentsCount),
 		IsLocked:      bool(n.Locked),
 		HeadCommitSHA: string(n.HeadRefOid),
-		ChangedFiles: int(n.ChangedFiles),
-		Additions:    int(n.Additions),
-		Deletions:    int(n.Deletions),
+		ChangedFiles:  int(n.ChangedFiles),
+		Additions:     int(n.Additions),
+		Deletions:     int(n.Deletions),
 	}
 
 	// reviewers

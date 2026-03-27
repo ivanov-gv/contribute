@@ -65,7 +65,7 @@ type reviewThreadNode struct {
 	StartLine         *githubv4.Int
 	OriginalLine      *githubv4.Int
 	OriginalStartLine *githubv4.Int
-	Comments struct {
+	Comments          struct {
 		Nodes []graphql_model.ThreadCommentNode
 	} `graphql:"comments(first: 50)"`
 }
@@ -107,7 +107,7 @@ func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(prNumber),
+		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
 	}
 
 	var query threadsQuery
@@ -168,7 +168,7 @@ func (s *Service) findThreadNodeID(prNumber int, threadID int64) (githubv4.ID, e
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(prNumber),
+		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
 	}
 
 	var query threadsQuery
@@ -226,4 +226,3 @@ func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread
 	}
 	return t
 }
-

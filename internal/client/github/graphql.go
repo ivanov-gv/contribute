@@ -46,7 +46,7 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 
 		// retry on rate limit (403 or 429)
 		if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusTooManyRequests {
-			resp.Body.Close()
+			resp.Body.Close() //nolint:errcheck,gosec // best-effort close before retry
 
 			// respect Retry-After header if present
 			if retryAfter := resp.Header.Get(retryAfterHeader); retryAfter != "" {
