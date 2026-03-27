@@ -72,6 +72,64 @@ func TestCollectGroupsNoDiff(t *testing.T) {
 	})
 }
 
+func TestCollectGroupsWithDiff(t *testing.T) {
+	t.Run("filters by review ID and populates diff hunk", func(t *testing.T) {
+		nodes := []reviewThreadNodeWithDiff{
+			{
+				Path: "b.go",
+				Comments: struct {
+					Nodes []threadCommentNodeWithDiff
+				}{
+					Nodes: []threadCommentNodeWithDiff{
+						{
+							ThreadCommentNode: graphql_model.ThreadCommentNode{
+								DatabaseID:        1,
+								PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 100},
+							},
+							DiffHunk: "@@ -1,3 +1,4 @@\n+added line",
+						},
+						{
+							ThreadCommentNode: graphql_model.ThreadCommentNode{
+								DatabaseID:        2,
+								PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 100},
+							},
+							DiffHunk: "@@ -1,3 +1,4 @@\n+added line",
+						},
+					},
+				},
+			},
+		}
+
+		groups := collectGroupsWithDiff(nodes, 100)
+		require.Len(t, groups, 1)
+		assert.Len(t, groups[0].Comments, 2)
+		assert.Equal(t, "@@ -1,3 +1,4 @@\n+added line", groups[0].DiffHunk)
+	})
+
+	t.Run("skips threads with no matching comments", func(t *testing.T) {
+		nodes := []reviewThreadNodeWithDiff{
+			{
+				Path: "b.go",
+				Comments: struct {
+					Nodes []threadCommentNodeWithDiff
+				}{
+					Nodes: []threadCommentNodeWithDiff{
+						{
+							ThreadCommentNode: graphql_model.ThreadCommentNode{
+								DatabaseID:        1,
+								PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 200},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		groups := collectGroupsWithDiff(nodes, 100)
+		assert.Empty(t, groups)
+	})
+}
+
 func TestSortedGroups(t *testing.T) {
 	groups := []ReviewThreadGroup{
 		{

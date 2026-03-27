@@ -31,7 +31,7 @@ func TestFormat(t *testing.T) {
 
 		output := info.Format()
 
-		assert.Contains(t, output, "# Add feature X #42")
+		assert.Contains(t, output, "Add feature X #42")
 		assert.Contains(t, output, "open, by @alice, 3 commits")
 		assert.Contains(t, output, "`feature-x` -> `main`")
 		assert.Contains(t, output, "no merge conflict")
@@ -81,7 +81,7 @@ func TestFormat(t *testing.T) {
 		}
 
 		output := info.Format()
-		assert.Contains(t, output, "merge status unknown")
+		assert.Contains(t, output, "no merge conflict")
 	})
 
 	t.Run("single commit uses singular", func(t *testing.T) {

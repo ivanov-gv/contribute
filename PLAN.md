@@ -36,7 +36,7 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 - Services accept interfaces, not concrete types
 - Generate mocks with mockery for each interface
 
-### 1.3 Unit tests for all services
+### 1.3 Unit tests for all services ✅
 **What** (per service):
 
 | Package | What to test |

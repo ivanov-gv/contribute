@@ -24,8 +24,7 @@ func TestMapPR(t *testing.T) {
 		}
 		node.Author.Login = "alice"
 		node.Commits.TotalCount = 3
-		node.Comments.TotalCount = 2
-		node.Reviews.TotalCount = 1
+		node.TotalCommentsCount = 3
 		node.Assignees.Nodes = []struct{ Login githubv4.String }{
 			{Login: "alice"},
 		}
@@ -58,7 +57,7 @@ func TestMapPR(t *testing.T) {
 		assert.Equal(t, "main", info.Base)
 		assert.Equal(t, "alice", info.Author)
 		assert.Equal(t, 3, info.CommitCount)
-		assert.Equal(t, 3, info.CommentCount) // 2 comments + 1 review
+		assert.Equal(t, 3, info.CommentCount)
 		assert.Equal(t, []string{"@alice"}, info.Assignees)
 		assert.Equal(t, []string{"enhancement"}, info.Labels)
 		assert.Equal(t, []string{"Board"}, info.Projects)
