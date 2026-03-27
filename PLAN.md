@@ -296,7 +296,7 @@ Config priority:
 - Log warnings when approaching limits
 - Add exponential backoff on 403 rate limit responses
 
-### 6.3 Structured error types
+### 6.3 Structured error types ✅
 **What**:
 - Replace raw `fmt.Errorf` with typed errors for common cases:
   - `ErrNotFound` (PR, review, thread, comment not found)
@@ -305,7 +305,7 @@ Config priority:
   - `ErrTokenExpired`
 - Consumers can handle each case differently
 
-### 6.4 Output formats
+### 6.4 Output formats ✅
 **What**:
 - Add `--format json` flag to all read commands
 - JSON output for machine consumption (by other tools, scripts, agents)

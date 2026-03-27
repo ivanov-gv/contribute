@@ -33,6 +33,9 @@ func (a *app) newReviewCmd() *cobra.Command {
 				return fmt.Errorf("reviewService.Get [pr=%d, review=%d]: %w", number, reviewID, err)
 			}
 
+			if outputFormat(cmd) == "json" {
+				return printJSON(detail)
+			}
 			fmt.Print(detail.Format(showDiff, showHidden))
 			return nil
 		},

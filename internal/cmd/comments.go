@@ -38,12 +38,18 @@ func (a *app) newCommentsCmd() *cobra.Command {
 				if filtered == nil {
 					return fmt.Errorf("comment #%d not found", commentID)
 				}
+				if outputFormat(cmd) == "json" {
+					return printJSON(filtered)
+				}
 				// single-item: always show hidden, normalize to single trailing newline
 				output := filtered.Format(true)
 				fmt.Print(strings.TrimRight(output, "\n") + "\n")
 				return nil
 			}
 
+			if outputFormat(cmd) == "json" {
+				return printJSON(result)
+			}
 			fmt.Print(result.Format(showHidden))
 			return nil
 		},

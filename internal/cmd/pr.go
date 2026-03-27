@@ -34,8 +34,7 @@ func (a *app) newPRCmd() *cobra.Command {
 				return fmt.Errorf("prService.Get [number=%d]: %w", number, err)
 			}
 
-			fmt.Print(info.Format())
-			return nil
+			return printOutput(cmd, info, info)
 		},
 	}
 

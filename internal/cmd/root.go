@@ -69,6 +69,8 @@ func Execute() {
 		},
 	}
 
+	rootCmd.PersistentFlags().String("format", "", "Output format: json (default: markdown)")
+
 	rootCmd.AddCommand(
 		// auth commands override PersistentPreRunE with a no-op — no token required
 		newAuthCmd(),

@@ -30,6 +30,9 @@ func (a *app) newThreadCmd() *cobra.Command {
 			}
 
 			showHidden, _ := cmd.Flags().GetBool("show-hidden")
+			if outputFormat(cmd) == "json" {
+				return printJSON(t)
+			}
 			fmt.Print(t.Format(showHidden))
 			return nil
 		},

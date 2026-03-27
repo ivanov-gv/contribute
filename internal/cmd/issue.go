@@ -26,8 +26,7 @@ func (a *app) newIssueCmd() *cobra.Command {
 				return fmt.Errorf("issueService.Get [number=%d]: %w", number, err)
 			}
 
-			fmt.Print(info.Format())
-			return nil
+			return printOutput(cmd, info, info)
 		},
 	}
 
@@ -54,6 +53,9 @@ func (a *app) newIssuesCmd() *cobra.Command {
 				return fmt.Errorf("issueService.List: %w", err)
 			}
 
+			if outputFormat(cmd) == "json" {
+				return printJSON(items)
+			}
 			fmt.Print(issue.FormatList(items))
 			return nil
 		},
