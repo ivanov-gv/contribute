@@ -311,7 +311,7 @@ Config priority:
 - JSON output for machine consumption (by other tools, scripts, agents)
 - Markdown remains default for human/agent readability
 
-### 6.5 Logging improvements
+### 6.5 Logging improvements ✅
 **What**:
 - Add `--verbose` / `-v` flag for debug logging
 - Log all API calls at debug level (method, URL, response time)

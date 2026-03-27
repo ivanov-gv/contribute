@@ -41,6 +41,8 @@ func (a *app) init() error {
 	gql := ghclient.NewGraphQLClient(cfg.Token)
 	rest := ghrest.NewClient(nil).WithAuthToken(cfg.Token)
 
+	log.Debug().Str("owner", cfg.Owner).Str("repo", cfg.Repo).Msg("config loaded")
+
 	a.cfg = cfg
 	a.prService = pr.NewService(gql, cfg.Owner, cfg.Repo)
 	a.commentService = comment.NewService(gql, rest, cfg.Owner, cfg.Repo)
@@ -65,11 +67,18 @@ func Execute() {
 		SilenceUsage: true,
 		// initialize app before any authenticated command runs
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			if verbose {
+				zerolog.SetGlobalLevel(zerolog.DebugLevel)
+			} else {
+				zerolog.SetGlobalLevel(zerolog.InfoLevel)
+			}
 			return _app.init()
 		},
 	}
 
 	rootCmd.PersistentFlags().String("format", "", "Output format: json (default: markdown)")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable debug logging")
 
 	rootCmd.AddCommand(
 		// auth commands override PersistentPreRunE with a no-op — no token required
