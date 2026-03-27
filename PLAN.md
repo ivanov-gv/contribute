@@ -203,7 +203,7 @@ func TestE2E(t *testing.T) {
 
 **Recommendation**: Start with Option A. It works anywhere, needs no infrastructure, and is sufficient for the agent workflow. The agent (Claude Code) can use a `/loop` skill or manual polling.
 
-### 4.2 Full workflow skill/script
+### 4.2 Full workflow skill/script ✅
 **Why**: Package the complete workflow as a reusable script the agent can execute.
 **Flow**:
 ```
@@ -229,7 +229,7 @@ func TestE2E(t *testing.T) {
    d. Sleep, repeat
 ```
 
-### 4.3 Claude Code integration
+### 4.3 Claude Code integration ✅
 **What**:
 - A Claude Code skill (in `.claude/skills/`) that wraps the full workflow
 - Skill name: `/contribute` or `/review-cycle`
