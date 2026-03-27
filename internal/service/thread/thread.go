@@ -6,6 +6,7 @@ import (
 
 	"github.com/shurcooL/githubv4"
 
+	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
@@ -48,35 +49,6 @@ type Thread struct {
 	Comments          []ThreadComment
 }
 
-// reactionNode is a single reaction with content and author
-type reactionNode struct {
-	Content githubv4.String
-	User    struct {
-		Login githubv4.String
-	}
-}
-
-// threadCommentNode represents a comment within a review thread
-type threadCommentNode struct {
-	DatabaseID int64
-	Author     struct {
-		Login githubv4.String
-	}
-	Body            githubv4.String
-	CreatedAt       githubv4.DateTime
-	IsMinimized     githubv4.Boolean
-	MinimizedReason githubv4.String
-	ReplyTo         *struct {
-		DatabaseID int64
-	}
-	PullRequestReview *struct {
-		DatabaseID int64
-	}
-	Reactions struct {
-		Nodes []reactionNode
-	} `graphql:"reactions(first: 20)"`
-}
-
 // reviewThreadNode represents a single review thread with its comments
 type reviewThreadNode struct {
 	ID                githubv4.ID
@@ -87,8 +59,8 @@ type reviewThreadNode struct {
 	StartLine         *githubv4.Int
 	OriginalLine      *githubv4.Int
 	OriginalStartLine *githubv4.Int
-	Comments          struct {
-		Nodes []threadCommentNode
+	Comments struct {
+		Nodes []graphql_model.ThreadCommentNode
 	} `graphql:"comments(first: 50)"`
 }
 
@@ -236,7 +208,7 @@ func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread
 			CreatedAt:       c.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			IsMinimized:     bool(c.IsMinimized),
 			MinimizedReason: string(c.MinimizedReason),
-			Reactions:       mapReactions(c.Reactions.Nodes),
+			Reactions:       graphql_model.MapReactions(c.Reactions.Nodes),
 		}
 		if c.ReplyTo != nil {
 			tc.ReplyToID = c.ReplyTo.DatabaseID
@@ -249,10 +221,3 @@ func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread
 	return t
 }
 
-func mapReactions(nodes []reactionNode) []format.Reaction {
-	reactions := make([]format.Reaction, len(nodes))
-	for i, n := range nodes {
-		reactions[i] = format.Reaction{Content: string(n.Content), Author: string(n.User.Login)}
-	}
-	return reactions
-}

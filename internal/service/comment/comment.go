@@ -7,6 +7,7 @@ import (
 	ghrest "github.com/google/go-github/v69/github"
 	"github.com/shurcooL/githubv4"
 
+	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
@@ -56,14 +57,6 @@ type CommentsResult struct {
 	Reviews       []Review
 }
 
-// reactionNode is a single reaction with content and author
-type reactionNode struct {
-	Content githubv4.String
-	User    struct {
-		Login githubv4.String
-	}
-}
-
 // issueCommentNode is a single top-level comment node
 type issueCommentNode struct {
 	DatabaseID int64
@@ -74,8 +67,8 @@ type issueCommentNode struct {
 	CreatedAt       githubv4.DateTime
 	IsMinimized     githubv4.Boolean
 	MinimizedReason githubv4.String
-	Reactions       struct {
-		Nodes []reactionNode
+	Reactions struct {
+		Nodes []graphql_model.ReactionNode
 	} `graphql:"reactions(first: 100)"`
 }
 
@@ -94,7 +87,7 @@ type reviewNode struct {
 		TotalCount githubv4.Int
 	}
 	Reactions struct {
-		Nodes []reactionNode
+		Nodes []graphql_model.ReactionNode
 	} `graphql:"reactions(first: 100)"`
 }
 
@@ -156,7 +149,7 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 			CreatedAt:       n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			IsMinimized:     bool(n.IsMinimized),
 			MinimizedReason: string(n.MinimizedReason),
-			Reactions:       mapReactions(n.Reactions.Nodes),
+			Reactions:       graphql_model.MapReactions(n.Reactions.Nodes),
 		})
 	}
 
@@ -172,7 +165,7 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 			State:           string(n.State),
 			CreatedAt:       n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			CommentCount:    int(n.Comments.TotalCount),
-			Reactions:       mapReactions(n.Reactions.Nodes),
+			Reactions:       graphql_model.MapReactions(n.Reactions.Nodes),
 			IsMinimized:     bool(n.IsMinimized),
 			MinimizedReason: string(n.MinimizedReason),
 		}
@@ -292,10 +285,3 @@ func computeAllThreadsResolved(threads []reviewThreadSummaryNode) map[int64]bool
 	return result
 }
 
-func mapReactions(nodes []reactionNode) []format.Reaction {
-	reactions := make([]format.Reaction, len(nodes))
-	for i, n := range nodes {
-		reactions[i] = format.Reaction{Content: string(n.Content), Author: string(n.User.Login)}
-	}
-	return reactions
-}

@@ -6,6 +6,8 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 )
 
 func TestBuildThread(t *testing.T) {
@@ -16,9 +18,9 @@ func TestBuildThread(t *testing.T) {
 			Path:       "main.go",
 			Line:       &line,
 			Comments: struct {
-				Nodes []threadCommentNode
+				Nodes []graphql_model.ThreadCommentNode
 			}{
-				Nodes: []threadCommentNode{
+				Nodes: []graphql_model.ThreadCommentNode{
 					{
 						DatabaseID: 500,
 						Body:       "Root comment",
@@ -72,9 +74,9 @@ func TestBuildThread(t *testing.T) {
 			OriginalLine:      &originalLine,
 			OriginalStartLine: &originalStartLine,
 			Comments: struct {
-				Nodes []threadCommentNode
+				Nodes []graphql_model.ThreadCommentNode
 			}{
-				Nodes: []threadCommentNode{
+				Nodes: []graphql_model.ThreadCommentNode{
 					{DatabaseID: 500, Body: "Comment"},
 				},
 			},
@@ -91,9 +93,9 @@ func TestBuildThread(t *testing.T) {
 		node := reviewThreadNode{
 			Path: "file.go",
 			Comments: struct {
-				Nodes []threadCommentNode
+				Nodes []graphql_model.ThreadCommentNode
 			}{
-				Nodes: []threadCommentNode{
+				Nodes: []graphql_model.ThreadCommentNode{
 					{DatabaseID: 500},
 				},
 			},
@@ -110,9 +112,9 @@ func TestBuildThread(t *testing.T) {
 		node := reviewThreadNode{
 			Path: "file.go",
 			Comments: struct {
-				Nodes []threadCommentNode
+				Nodes []graphql_model.ThreadCommentNode
 			}{
-				Nodes: []threadCommentNode{
+				Nodes: []graphql_model.ThreadCommentNode{
 					{
 						DatabaseID:      500,
 						IsMinimized:     true,
@@ -130,14 +132,14 @@ func TestBuildThread(t *testing.T) {
 }
 
 func TestMapReactions(t *testing.T) {
-	nodes := []reactionNode{
+	nodes := []graphql_model.ReactionNode{
 		{Content: "THUMBS_UP"},
 		{Content: "ROCKET"},
 	}
 	nodes[0].User.Login = "alice"
 	nodes[1].User.Login = "bob"
 
-	reactions := mapReactions(nodes)
+	reactions := graphql_model.MapReactions(nodes)
 	require.Len(t, reactions, 2)
 	assert.Equal(t, "THUMBS_UP", reactions[0].Content)
 	assert.Equal(t, "alice", reactions[0].Author)

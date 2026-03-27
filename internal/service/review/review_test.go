@@ -6,6 +6,8 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 )
 
 func TestCollectGroupsNoDiff(t *testing.T) {
@@ -14,9 +16,9 @@ func TestCollectGroupsNoDiff(t *testing.T) {
 			{
 				Path: "a.go",
 				Comments: struct {
-					Nodes []threadCommentNodeNoDiff
+					Nodes []graphql_model.ThreadCommentNode
 				}{
-					Nodes: []threadCommentNodeNoDiff{
+					Nodes: []graphql_model.ThreadCommentNode{
 						{DatabaseID: 1, PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 100}},
 						{DatabaseID: 2, PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 200}},
 					},
@@ -35,9 +37,9 @@ func TestCollectGroupsNoDiff(t *testing.T) {
 			{
 				Path: "a.go",
 				Comments: struct {
-					Nodes []threadCommentNodeNoDiff
+					Nodes []graphql_model.ThreadCommentNode
 				}{
-					Nodes: []threadCommentNodeNoDiff{
+					Nodes: []graphql_model.ThreadCommentNode{
 						{DatabaseID: 1, PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 200}},
 					},
 				},
@@ -53,9 +55,9 @@ func TestCollectGroupsNoDiff(t *testing.T) {
 			{
 				Path: "a.go",
 				Comments: struct {
-					Nodes []threadCommentNodeNoDiff
+					Nodes []graphql_model.ThreadCommentNode
 				}{
-					Nodes: []threadCommentNodeNoDiff{
+					Nodes: []graphql_model.ThreadCommentNode{
 						{DatabaseID: 10, PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 200}},
 						{DatabaseID: 20, PullRequestReview: &struct{ DatabaseID int64 }{DatabaseID: 100}},
 					},
@@ -174,7 +176,7 @@ func TestMapReviewComment(t *testing.T) {
 	})
 
 	t.Run("reactions mapped", func(t *testing.T) {
-		reactions := []reactionNode{
+		reactions := []graphql_model.ReactionNode{
 			{Content: "THUMBS_UP"},
 			{Content: "ROCKET"},
 		}

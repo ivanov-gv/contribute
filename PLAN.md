@@ -16,7 +16,7 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 
 ## Phase 1: Foundation — Tests, CI, Refactoring
 
-### 1.1 Extract shared GraphQL types
+### 1.1 Extract shared GraphQL types ✅
 **Why**: `reactionNode`, `mapReactions`, thread/comment node types are duplicated in `comment/`, `review/`, `thread/`.
 **What**:
 - Create `internal/model/graphql/` with shared node types: `ReactionNode`, `ThreadCommentNode`, `ReviewThreadNode`

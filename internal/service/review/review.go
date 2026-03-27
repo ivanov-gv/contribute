@@ -7,6 +7,7 @@ import (
 
 	"github.com/shurcooL/githubv4"
 
+	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
@@ -65,14 +66,6 @@ type ReviewDetail struct {
 	ThreadGroups    []ReviewThreadGroup
 }
 
-// reactionNode is a single reaction with content and author
-type reactionNode struct {
-	Content githubv4.String
-	User    struct {
-		Login githubv4.String
-	}
-}
-
 // reviewMetaNode holds review-level metadata (no inline comments)
 type reviewMetaNode struct {
 	DatabaseID int64
@@ -84,52 +77,16 @@ type reviewMetaNode struct {
 	CreatedAt       githubv4.DateTime
 	IsMinimized     githubv4.Boolean
 	MinimizedReason githubv4.String
-	Reactions       struct {
-		Nodes []reactionNode
-	} `graphql:"reactions(first: 20)"`
-}
-
-// threadCommentNodeNoDiff — comment within a review thread, without diffHunk
-type threadCommentNodeNoDiff struct {
-	DatabaseID int64
-	Author     struct {
-		Login githubv4.String
-	}
-	Body            githubv4.String
-	CreatedAt       githubv4.DateTime
-	IsMinimized     githubv4.Boolean
-	MinimizedReason githubv4.String
-	ReplyTo         *struct {
-		DatabaseID int64
-	}
-	PullRequestReview *struct {
-		DatabaseID int64
-	}
 	Reactions struct {
-		Nodes []reactionNode
+		Nodes []graphql_model.ReactionNode
 	} `graphql:"reactions(first: 20)"`
 }
 
-// threadCommentNodeWithDiff — comment within a review thread, with diffHunk
+// threadCommentNodeWithDiff — comment within a review thread, with diffHunk.
+// Embeds ThreadCommentNode and adds DiffHunk field.
 type threadCommentNodeWithDiff struct {
-	DatabaseID int64
-	Author     struct {
-		Login githubv4.String
-	}
-	Body            githubv4.String
-	CreatedAt       githubv4.DateTime
-	IsMinimized     githubv4.Boolean
-	MinimizedReason githubv4.String
-	DiffHunk        githubv4.String
-	ReplyTo         *struct {
-		DatabaseID int64
-	}
-	PullRequestReview *struct {
-		DatabaseID int64
-	}
-	Reactions struct {
-		Nodes []reactionNode
-	} `graphql:"reactions(first: 20)"`
+	graphql_model.ThreadCommentNode
+	DiffHunk githubv4.String
 }
 
 // reviewThreadNodeNoDiff — a review thread without diffHunk on comments
@@ -141,8 +98,8 @@ type reviewThreadNodeNoDiff struct {
 	StartLine         *githubv4.Int
 	OriginalLine      *githubv4.Int
 	OriginalStartLine *githubv4.Int
-	Comments          struct {
-		Nodes []threadCommentNodeNoDiff
+	Comments struct {
+		Nodes []graphql_model.ThreadCommentNode
 	} `graphql:"comments(first: 50)"`
 }
 
@@ -264,7 +221,7 @@ func collectGroupsWithDiff(nodes []reviewThreadNodeWithDiff, reviewDatabaseID in
 
 func buildGroupNoDiff(n reviewThreadNodeNoDiff, reviewDatabaseID int64) (ReviewThreadGroup, bool) {
 	// collect only comments from this review, preserving thread order
-	var reviewComments []threadCommentNodeNoDiff
+	var reviewComments []graphql_model.ThreadCommentNode
 	for _, c := range n.Comments.Nodes {
 		if c.PullRequestReview != nil && c.PullRequestReview.DatabaseID == reviewDatabaseID {
 			reviewComments = append(reviewComments, c)
@@ -312,7 +269,7 @@ func buildGroupWithDiff(n reviewThreadNodeWithDiff, reviewDatabaseID int64) (Rev
 
 // newThreadGroup initialises a ReviewThreadGroup with location info and ThreadID.
 // ThreadID is the database ID of the first comment in the full thread.
-func newThreadGroup[C interface{ getID() int64 }](
+func newThreadGroup[C interface{ GetID() int64 }](
 	isOutdated githubv4.Boolean,
 	isResolved githubv4.Boolean,
 	path githubv4.String,
@@ -325,7 +282,7 @@ func newThreadGroup[C interface{ getID() int64 }](
 		Path:       string(path),
 	}
 	if len(allComments) > 0 {
-		g.ThreadID = allComments[0].getID()
+		g.ThreadID = allComments[0].GetID()
 	}
 	if line != nil {
 		g.Line = int(*line)
@@ -342,14 +299,11 @@ func newThreadGroup[C interface{ getID() int64 }](
 	return g
 }
 
-func (c threadCommentNodeNoDiff) getID() int64   { return c.DatabaseID }
-func (c threadCommentNodeWithDiff) getID() int64 { return c.DatabaseID }
-
 // commentIDSet builds a set of database IDs for fast membership checks.
-func commentIDSet[C interface{ getID() int64 }](comments []C) map[int64]struct{} {
+func commentIDSet[C interface{ GetID() int64 }](comments []C) map[int64]struct{} {
 	ids := make(map[int64]struct{}, len(comments))
 	for _, c := range comments {
-		ids[c.getID()] = struct{}{}
+		ids[c.GetID()] = struct{}{}
 	}
 	return ids
 }
@@ -362,7 +316,7 @@ func mapReviewComment(
 	isMinimized githubv4.Boolean,
 	minimizedReason githubv4.String,
 	replyTo *struct{ DatabaseID int64 },
-	reactions []reactionNode,
+	reactions []graphql_model.ReactionNode,
 	reviewIDs map[int64]struct{},
 ) ReviewComment {
 	rc := ReviewComment{
@@ -372,7 +326,7 @@ func mapReviewComment(
 		CreatedAt:       createdAt.UTC().Format("2006-01-02T15:04:05Z"),
 		IsMinimized:     bool(isMinimized),
 		MinimizedReason: string(minimizedReason),
-		Reactions:       mapReactions(reactions),
+		Reactions:       graphql_model.MapReactions(reactions),
 	}
 	if replyTo != nil {
 		rc.ReplyToID = replyTo.DatabaseID
@@ -392,7 +346,7 @@ func buildReviewDetail(n *reviewMetaNode, viewerLogin string, groups []ReviewThr
 		ViewerLogin:     viewerLogin,
 		IsMinimized:     bool(n.IsMinimized),
 		MinimizedReason: string(n.MinimizedReason),
-		Reactions:       mapReactions(n.Reactions.Nodes),
+		Reactions:       graphql_model.MapReactions(n.Reactions.Nodes),
 		ThreadGroups:    groups,
 	}
 }
@@ -408,10 +362,3 @@ func sortedGroups(groups []ReviewThreadGroup) []ReviewThreadGroup {
 	return groups
 }
 
-func mapReactions(nodes []reactionNode) []format.Reaction {
-	reactions := make([]format.Reaction, len(nodes))
-	for i, n := range nodes {
-		reactions[i] = format.Reaction{Content: string(n.Content), Author: string(n.User.Login)}
-	}
-	return reactions
-}
