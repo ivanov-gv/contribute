@@ -11,17 +11,33 @@ import (
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
+// graphQLQuerier executes GraphQL queries
+type graphQLQuerier interface {
+	Query(ctx context.Context, q interface{}, variables map[string]interface{}) error
+}
+
+// issueCommenter creates top-level comments on issues/PRs
+type issueCommenter interface {
+	CreateComment(ctx context.Context, owner, repo string, number int, comment *ghrest.IssueComment) (*ghrest.IssueComment, *ghrest.Response, error)
+}
+
+// pullRequestCommenter creates reply comments on PR review threads
+type pullRequestCommenter interface {
+	CreateCommentInReplyTo(ctx context.Context, owner, repo string, number int, body string, commentID int64) (*ghrest.PullRequestComment, *ghrest.Response, error)
+}
+
 // Service provides comment operations — GraphQL for reads, REST for writes
 type Service struct {
-	gql        *githubv4.Client
-	restClient *ghrest.Client
-	owner      string
-	repo       string
+	gql          graphQLQuerier
+	issues       issueCommenter
+	pullRequests pullRequestCommenter
+	owner        string
+	repo         string
 }
 
 // NewService creates a new comment service
-func NewService(gql *githubv4.Client, restClient *ghrest.Client, owner, repo string) *Service {
-	return &Service{gql: gql, restClient: restClient, owner: owner, repo: repo}
+func NewService(gql graphQLQuerier, restClient *ghrest.Client, owner, repo string) *Service {
+	return &Service{gql: gql, issues: restClient.Issues, pullRequests: restClient.PullRequests, owner: owner, repo: repo}
 }
 
 // IssueComment holds a top-level PR comment
@@ -192,7 +208,7 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 
 // Post creates a new top-level comment on a PR via REST API
 func (s *Service) Post(prNumber int, body string) (*IssueComment, error) {
-	comment, _, err := s.restClient.Issues.CreateComment(
+	comment, _, err := s.issues.CreateComment(
 		context.Background(), s.owner, s.repo, prNumber,
 		&ghrest.IssueComment{Body: ghrest.Ptr(body)},
 	)
@@ -209,7 +225,7 @@ func (s *Service) Post(prNumber int, body string) (*IssueComment, error) {
 
 // ReplyToReviewComment posts a reply to an existing review comment in-thread via REST API
 func (s *Service) ReplyToReviewComment(prNumber int, commentID int64, body string) (*IssueComment, error) {
-	comment, _, err := s.restClient.PullRequests.CreateCommentInReplyTo(
+	comment, _, err := s.pullRequests.CreateCommentInReplyTo(
 		context.Background(), s.owner, s.repo, prNumber, body, commentID,
 	)
 	if err != nil {

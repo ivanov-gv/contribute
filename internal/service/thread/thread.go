@@ -10,15 +10,21 @@ import (
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
 )
 
+// graphQLClient executes GraphQL queries and mutations
+type graphQLClient interface {
+	Query(ctx context.Context, q interface{}, variables map[string]interface{}) error
+	Mutate(ctx context.Context, m interface{}, input githubv4.Input, variables map[string]interface{}) error
+}
+
 // Service provides thread lookup operations via GraphQL
 type Service struct {
-	gql   *githubv4.Client
+	gql   graphQLClient
 	owner string
 	repo  string
 }
 
 // NewService creates a new thread service
-func NewService(gql *githubv4.Client, owner, repo string) *Service {
+func NewService(gql graphQLClient, owner, repo string) *Service {
 	return &Service{gql: gql, owner: owner, repo: repo}
 }
 

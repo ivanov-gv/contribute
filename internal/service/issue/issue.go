@@ -8,15 +8,20 @@ import (
 	"github.com/shurcooL/githubv4"
 )
 
+// graphQLQuerier executes GraphQL queries
+type graphQLQuerier interface {
+	Query(ctx context.Context, q interface{}, variables map[string]interface{}) error
+}
+
 // Service provides issue operations via GraphQL
 type Service struct {
-	gql   *githubv4.Client
+	gql   graphQLQuerier
 	owner string
 	repo  string
 }
 
 // NewService creates a new issue service
-func NewService(gql *githubv4.Client, owner, repo string) *Service {
+func NewService(gql graphQLQuerier, owner, repo string) *Service {
 	return &Service{gql: gql, owner: owner, repo: repo}
 }
 

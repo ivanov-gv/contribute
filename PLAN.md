@@ -23,7 +23,7 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 - Move `mapReactions` to a single location
 - All services reference shared types
 
-### 1.2 Add interfaces at consumer side
+### 1.2 Add interfaces at consumer side ✅
 **Why**: Services directly depend on concrete `*githubv4.Client` and `*ghrest.Client`. This makes unit testing impossible without hitting GitHub.
 **What**:
 - Define interfaces in each service for the operations it needs:
