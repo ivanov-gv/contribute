@@ -268,7 +268,7 @@ The agent needs its own identity — authenticating as a GitHub App, not on beha
   - File path: `GH_CONTRIBUTE_PRIVATE_KEY_PATH`
   - In production: injected by the container runtime (Docker secret, K8s secret, cloud secret manager)
 
-### 5.3 Token lifecycle management
+### 5.3 Token lifecycle management ✅
 **What**:
 - Installation tokens expire in 1 hour
 - Add a `tokenProvider` interface that handles refresh transparently
