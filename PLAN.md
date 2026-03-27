@@ -51,7 +51,7 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 
 **How**: Use mockery-generated mocks for GraphQL/REST interfaces. Test the service methods with mock responses.
 
-### 1.4 Unit tests for CLI commands
+### 1.4 Unit tests for CLI commands ✅
 **What**: Test cobra command wiring — correct flags, argument parsing, error messages.
 - Test `resolvePR` logic with mocked PR service
 - Test `react` command validation of reaction types
