@@ -85,6 +85,7 @@ func Execute() {
 		_app.newSubmitReviewCmd(),
 		_app.newThreadCmd(),
 		_app.newIssueCmd(),
+		_app.newIssueCommentCmd(),
 		_app.newIssuesCmd(),
 	)
 

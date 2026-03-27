@@ -160,7 +160,7 @@ func TestE2E(t *testing.T) {
 
 ## Phase 3: Issue-Driven Workflow
 
-### 3.1 Read GitHub issues
+### 3.1 Read GitHub issues ✅
 **Why**: The agent workflow should start from "here's an issue, go fix it" — not from a human typing a request.
 **What**:
 - New command: `gh contribute issue <number>` — shows issue details (title, body, labels, assignees, comments)
@@ -171,12 +171,12 @@ func TestE2E(t *testing.T) {
 - New service: `internal/service/issue/`
 - GraphQL queries for rich issue data
 
-### 3.2 Issue comment operations
+### 3.2 Issue comment operations ✅
 **What**:
 - `gh contribute issue-comment <issue-number> <body>` — post a comment on an issue
 - Reuse existing comment service (issues and PRs share the same comment API)
 
-### 3.3 Link issues to PRs
+### 3.3 Link issues to PRs ✅
 **What**:
 - When creating a PR (via `gh pr create`), the agent can reference `Fixes #N` in the body
 - `gh contribute issue` output shows linked PRs so the agent knows if work is already in progress
