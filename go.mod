@@ -3,6 +3,7 @@ module github.com/ivanov-gv/gh-contribute
 go 1.24.7
 
 require (
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/go-github/v69 v69.2.0
 	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.34.0

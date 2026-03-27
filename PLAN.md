@@ -241,11 +241,11 @@ func TestE2E(t *testing.T) {
 
 ## Phase 5: App-Level Authentication (Bot Account)
 
-### 5.1 Current auth model
+### 5.1 Current auth model ✅
 Currently: Device Flow → user access token → all API calls are "app[bot] on behalf of user".
 The agent needs its own identity — authenticating as a GitHub App, not on behalf of a user.
 
-### 5.2 Replace Device Flow with GitHub App Installation Token auth
+### 5.2 Replace Device Flow with GitHub App Installation Token auth ✅
 **Why**: The agent authenticates as itself with its own GitHub App account.
 **How**:
 1. Create a GitHub App for the agent (e.g., "claude-contributor")

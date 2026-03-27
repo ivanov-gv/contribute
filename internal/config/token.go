@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
 )
 
 // ErrNotAuthenticated is returned when no token is found.
@@ -27,15 +29,29 @@ const (
 	tokenFilePermissions = 0600
 )
 
-// LoadToken returns the GitHub App user access token.
-// Priority: GH_CONTRIBUTE_TOKEN env var → ~/.config/gh-contribute/token file.
+// LoadToken returns the GitHub access token.
+// Priority: GH_CONTRIBUTE_TOKEN env var → GitHub App credentials → ~/.config/gh-contribute/token file.
 func LoadToken() (string, error) {
-	// check env var first — CI / non-interactive environments
+	// 1. check env var first — CI / non-interactive environments
 	if t := os.Getenv(TokenEnv); t != "" {
 		return t, nil
 	}
 
-	// load from config file
+	// 2. try GitHub App auth (APP_ID + PRIVATE_KEY → installation token)
+	token, err := tryAppAuth()
+	if err != nil {
+		return "", fmt.Errorf("tryAppAuth: %w", err)
+	}
+	if token != "" {
+		return token, nil
+	}
+
+	// 3. fall back to config file (Device Flow token)
+	return loadTokenFromFile()
+}
+
+// loadTokenFromFile reads the token from ~/.config/gh-contribute/token
+func loadTokenFromFile() (string, error) {
 	path, err := tokenFilePath()
 	if err != nil {
 		return "", fmt.Errorf("tokenFilePath: %w", err)
@@ -52,6 +68,25 @@ func LoadToken() (string, error) {
 	token := strings.TrimSpace(string(data))
 	if token == "" {
 		return "", ErrNotAuthenticated
+	}
+
+	return token, nil
+}
+
+// tryAppAuth attempts GitHub App authentication if credentials are configured.
+// Returns ("", nil) if app auth is not configured (no APP_ID env var).
+func tryAppAuth() (string, error) {
+	appCfg, err := auth.LoadAppConfig()
+	if err != nil {
+		return "", fmt.Errorf("auth.LoadAppConfig: %w", err)
+	}
+	if appCfg == nil {
+		return "", nil // not configured — skip
+	}
+
+	token, _, err := auth.GetAppToken(appCfg)
+	if err != nil {
+		return "", fmt.Errorf("auth.GetAppToken [appID=%d]: %w", appCfg.AppID, err)
 	}
 
 	return token, nil
