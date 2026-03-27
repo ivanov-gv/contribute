@@ -144,7 +144,7 @@ func TestE2E(t *testing.T) {
 - Uses REST API: `POST /repos/{owner}/{repo}/pulls/{pull_number}/comments`
 - Requires `commit_id` (latest commit SHA from PR head)
 
-### 2.3 Submit a review
+### 2.3 Submit a review ✅
 **Why**: Agent should be able to approve, request changes, or leave a review.
 **What**:
 - New command: `gh contribute submit-review --event APPROVE|REQUEST_CHANGES|COMMENT [--body "..."]`

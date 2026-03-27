@@ -21,10 +21,11 @@ type issueCommenter interface {
 	CreateComment(ctx context.Context, owner, repo string, number int, comment *ghrest.IssueComment) (*ghrest.IssueComment, *ghrest.Response, error)
 }
 
-// pullRequestCommenter creates and replies to PR review comments
+// pullRequestCommenter creates and replies to PR review comments and submits reviews
 type pullRequestCommenter interface {
 	CreateComment(ctx context.Context, owner, repo string, number int, comment *ghrest.PullRequestComment) (*ghrest.PullRequestComment, *ghrest.Response, error)
 	CreateCommentInReplyTo(ctx context.Context, owner, repo string, number int, body string, commentID int64) (*ghrest.PullRequestComment, *ghrest.Response, error)
+	CreateReview(ctx context.Context, owner, repo string, number int, review *ghrest.PullRequestReviewRequest) (*ghrest.PullRequestReview, *ghrest.Response, error)
 }
 
 // Service provides comment operations — GraphQL for reads, REST for writes
@@ -261,6 +262,22 @@ func (s *Service) ReplyToReviewComment(prNumber int, commentID int64, body strin
 		Body:       comment.GetBody(),
 		CreatedAt:  comment.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
 	}, nil
+}
+
+// SubmitReview creates a new review on a PR with the given event and optional body.
+// Valid events: APPROVE, REQUEST_CHANGES, COMMENT.
+func (s *Service) SubmitReview(prNumber int, event, body string) (int64, error) {
+	review := &ghrest.PullRequestReviewRequest{
+		Event: ghrest.Ptr(event),
+	}
+	if body != "" {
+		review.Body = ghrest.Ptr(body)
+	}
+	created, _, err := s.pullRequests.CreateReview(context.Background(), s.owner, s.repo, prNumber, review)
+	if err != nil {
+		return 0, fmt.Errorf("PullRequests.CreateReview [pr=%d, event='%s']: %w", prNumber, event, err)
+	}
+	return created.GetID(), nil
 }
 
 // FilterByID returns a CommentsResult containing only the comment or review with the given database ID
