@@ -11,15 +11,25 @@ import (
 
 const (
 	maxRetries       = 4
-	initialBackoff   = 2 * time.Second
 	rateLimitHeader  = "X-RateLimit-Remaining"
 	retryAfterHeader = "Retry-After"
 	rateLimitWarning = 100 // warn when remaining drops below this
 )
 
+// initialBackoff is a var so tests can override it to avoid slow retries.
+var initialBackoff = 2 * time.Second
+
 // rateLimitTransport wraps tokenTransport with rate limit handling and exponential backoff
 type rateLimitTransport struct {
 	token string
+	inner http.RoundTripper // nil means use http.DefaultTransport
+}
+
+func (t *rateLimitTransport) transport() http.RoundTripper {
+	if t.inner != nil {
+		return t.inner
+	}
+	return http.DefaultTransport
 }
 
 func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -31,7 +41,7 @@ func (t *rateLimitTransport) RoundTrip(req *http.Request) (*http.Response, error
 	backoff := initialBackoff
 
 	for attempt := range maxRetries {
-		resp, err = http.DefaultTransport.RoundTrip(req)
+		resp, err = t.transport().RoundTrip(req)
 		if err != nil {
 			return nil, err
 		}

@@ -19,8 +19,16 @@ install:
 test:
 	go test -count=1 -race ./internal/...
 
-## test-integration: run integration tests with race detector (requires GH_CONTRIBUTE_TOKEN)
+## test-integration-local: run edge-case integration tests with mock server (no token needed)
+test-integration-local:
+	go test -count=1 -race ./test/integration/...
+
+## test-integration: run integration tests against real GitHub API (requires GH_CONTRIBUTE_TOKEN)
 test-integration:
+	go test -tags integration -count=1 -race ./test/integration/...
+
+## test-e2e: run E2E tests against real GitHub API (requires GH_CONTRIBUTE_TOKEN)
+test-e2e:
 	go test -tags integration -count=1 -race ./test/...
 
 ## lint: run golangci-lint

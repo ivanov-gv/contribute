@@ -67,15 +67,15 @@ func formatIssueComment(c *IssueComment, viewerLogin string, showHidden bool) st
 		}
 		if !showHidden {
 			// compact header-only for hidden comments
-			b.WriteString(fmt.Sprintf("issue #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason))
+			fmt.Fprintf(&b, "issue #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason)
 			return b.String()
 		}
 		// full content with hidden marker in header
-		b.WriteString(fmt.Sprintf("issue #%d by %s | hidden: %s  \n", c.DatabaseID, authorDisplay, reason))
+		fmt.Fprintf(&b, "issue #%d by %s | hidden: %s  \n", c.DatabaseID, authorDisplay, reason)
 	} else {
-		b.WriteString(fmt.Sprintf("issue #%d by %s  \n", c.DatabaseID, authorDisplay))
+		fmt.Fprintf(&b, "issue #%d by %s  \n", c.DatabaseID, authorDisplay)
 	}
-	b.WriteString(fmt.Sprintf("_%s_  \n", format.Date(c.CreatedAt)))
+	fmt.Fprintf(&b, "_%s_  \n", format.Date(c.CreatedAt))
 	b.WriteString("\n")
 	body := strings.TrimRight(strings.ReplaceAll(c.Body, "\r\n", "\n"), "\n")
 	for _, line := range strings.Split(body, "\n") {
@@ -101,21 +101,21 @@ func formatReview(r *Review, viewerLogin string, showHidden bool) string {
 		}
 		if !showHidden {
 			// compact header-only for hidden reviews
-			b.WriteString(fmt.Sprintf("review #%d by %s | hidden: %s\n", r.DatabaseID, authorDisplay, reason))
+			fmt.Fprintf(&b, "review #%d by %s | hidden: %s\n", r.DatabaseID, authorDisplay, reason)
 			return b.String()
 		}
 		// full content with hidden marker in header
-		b.WriteString(fmt.Sprintf("review #%d by %s | hidden: %s  \n", r.DatabaseID, authorDisplay, reason))
+		fmt.Fprintf(&b, "review #%d by %s | hidden: %s  \n", r.DatabaseID, authorDisplay, reason)
 	} else if r.State == "DISMISSED" {
 		if !showHidden {
-			b.WriteString(fmt.Sprintf("review #%d by %s | hidden: Dismissed\n", r.DatabaseID, authorDisplay))
+			fmt.Fprintf(&b, "review #%d by %s | hidden: Dismissed\n", r.DatabaseID, authorDisplay)
 			return b.String()
 		}
-		b.WriteString(fmt.Sprintf("review #%d by %s | hidden: Dismissed  \n", r.DatabaseID, authorDisplay))
+		fmt.Fprintf(&b, "review #%d by %s | hidden: Dismissed  \n", r.DatabaseID, authorDisplay)
 	} else {
-		b.WriteString(fmt.Sprintf("review #%d by %s  \n", r.DatabaseID, authorDisplay))
+		fmt.Fprintf(&b, "review #%d by %s  \n", r.DatabaseID, authorDisplay)
 	}
-	b.WriteString(fmt.Sprintf("_%s_  \n", format.Date(r.CreatedAt)))
+	fmt.Fprintf(&b, "_%s_  \n", format.Date(r.CreatedAt))
 	b.WriteString("\n")
 
 	if r.Body != "" {
@@ -127,7 +127,7 @@ func formatReview(r *Review, viewerLogin string, showHidden bool) string {
 	}
 
 	if r.CommentCount > 0 {
-		b.WriteString(fmt.Sprintf("comments: %d  \n", r.CommentCount))
+		fmt.Fprintf(&b, "comments: %d  \n", r.CommentCount)
 	}
 
 	b.WriteString(format.Reactions(r.Reactions, viewerLogin))

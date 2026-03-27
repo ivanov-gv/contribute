@@ -10,7 +10,7 @@ func (info *Info) Format() string {
 	var b strings.Builder
 
 	// header: title only (no # heading prefix)
-	b.WriteString(fmt.Sprintf("%s #%d\n", info.Title, info.Number))
+	fmt.Fprintf(&b, "%s #%d\n", info.Title, info.Number)
 
 	// meta line: state, author, commits, branches, then either files-changed (merged) or merge status (open)
 	state := info.State
@@ -29,26 +29,26 @@ func (info *Info) Format() string {
 	} else {
 		statusSuffix = "no merge conflict"
 	}
-	b.WriteString(fmt.Sprintf("%s, by @%s, %d %s `%s` -> `%s`, %s\n",
-		state, info.Author, info.CommitCount, commitWord, info.Head, info.Base, statusSuffix))
+	fmt.Fprintf(&b, "%s, by @%s, %d %s `%s` -> `%s`, %s\n",
+		state, info.Author, info.CommitCount, commitWord, info.Head, info.Base, statusSuffix)
 
 	// url
 	b.WriteString(info.URL + "\n")
 	b.WriteString("\n")
 
 	// metadata fields
-	b.WriteString(fmt.Sprintf("Reviewers: %s  \n", strings.Join(info.Reviewers, ", ")))
-	b.WriteString(fmt.Sprintf("Assignees: %s  \n", strings.Join(info.Assignees, ", ")))
-	b.WriteString(fmt.Sprintf("Labels: %s  \n", strings.Join(info.Labels, ", ")))
-	b.WriteString(fmt.Sprintf("Projects: %s  \n", strings.Join(info.Projects, ", ")))
-	b.WriteString(fmt.Sprintf("Milestone: %s  \n", info.Milestone))
+	fmt.Fprintf(&b, "Reviewers: %s  \n", strings.Join(info.Reviewers, ", "))
+	fmt.Fprintf(&b, "Assignees: %s  \n", strings.Join(info.Assignees, ", "))
+	fmt.Fprintf(&b, "Labels: %s  \n", strings.Join(info.Labels, ", "))
+	fmt.Fprintf(&b, "Projects: %s  \n", strings.Join(info.Projects, ", "))
+	fmt.Fprintf(&b, "Milestone: %s  \n", info.Milestone)
 
 	// linked issues
 	var issueStrs []string
 	for _, i := range info.Issues {
 		issueStrs = append(issueStrs, fmt.Sprintf("#%d %s", i.Number, i.Title))
 	}
-	b.WriteString(fmt.Sprintf("Issues: %s  \n", strings.Join(issueStrs, ", ")))
+	fmt.Fprintf(&b, "Issues: %s  \n", strings.Join(issueStrs, ", "))
 
 	// conversation count, with locked indicator when applicable
 	commentWord := "comments"
@@ -59,7 +59,7 @@ func (info *Info) Format() string {
 	if info.IsLocked {
 		conversation += ", locked"
 	}
-	b.WriteString(fmt.Sprintf("\nConversation: %s\n", conversation))
+	fmt.Fprintf(&b, "\nConversation: %s\n", conversation)
 
 	// description — each line quoted with > so it reads as a blockquote
 	b.WriteString("\n---\n\n")

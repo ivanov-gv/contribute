@@ -89,7 +89,7 @@ func Reactions(reactions []Reaction, viewerLogin string) string {
 	for _, emoji := range order {
 		parts = append(parts, fmt.Sprintf("%d %s", counts[emoji], emoji))
 	}
-	b.WriteString(fmt.Sprintf("(%s)  \n", strings.Join(parts, " ")))
+	fmt.Fprintf(&b, "(%s)  \n", strings.Join(parts, " "))
 
 	if len(byViewer) > 0 {
 		viewerCounts := make(map[string]int)
@@ -104,7 +104,7 @@ func Reactions(reactions []Reaction, viewerLogin string) string {
 		for _, emoji := range viewerOrder {
 			viewerParts = append(viewerParts, fmt.Sprintf("%d %s", viewerCounts[emoji], emoji))
 		}
-		b.WriteString(fmt.Sprintf("reactions by you: (%s)  \n", strings.Join(viewerParts, " ")))
+		fmt.Fprintf(&b, "reactions by you: (%s)  \n", strings.Join(viewerParts, " "))
 	} else {
 		b.WriteString("reactions by you:  \n")
 	}

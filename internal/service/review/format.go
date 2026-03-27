@@ -20,11 +20,11 @@ func (d *ReviewDetail) Format(showDiff bool, showHidden bool) string {
 		if reason == "" {
 			reason = "hidden"
 		}
-		b.WriteString(fmt.Sprintf("review #%d by %s  | hidden: %s  \n", d.DatabaseID, authorDisplay, reason))
+		fmt.Fprintf(&b, "review #%d by %s  | hidden: %s  \n", d.DatabaseID, authorDisplay, reason)
 	} else {
-		b.WriteString(fmt.Sprintf("review #%d by %s  \n", d.DatabaseID, authorDisplay))
+		fmt.Fprintf(&b, "review #%d by %s  \n", d.DatabaseID, authorDisplay)
 	}
-	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(d.CreatedAt)))
+	fmt.Fprintf(&b, "_%s_\n", format.Date(d.CreatedAt))
 	b.WriteString("\n")
 
 	hasBodyReactions := len(d.Reactions) > 0
@@ -111,9 +111,9 @@ func formatThreadGroupPlain(g ReviewThreadGroup, viewerLogin string, showDiff bo
 	// thread header
 	location := formatLocation(g)
 	if g.IsResolved {
-		b.WriteString(fmt.Sprintf("thread #%d  %s | hidden: Resolved  \n", g.ThreadID, location))
+		fmt.Fprintf(&b, "thread #%d  %s | hidden: Resolved  \n", g.ThreadID, location)
 	} else {
-		b.WriteString(fmt.Sprintf("thread #%d  %s  \n", g.ThreadID, location))
+		fmt.Fprintf(&b, "thread #%d  %s  \n", g.ThreadID, location)
 	}
 
 	if g.IsResolved && !showHidden {
@@ -145,18 +145,18 @@ func formatReviewCommentPlain(c ReviewComment, viewerLogin string, showHidden bo
 			reason = "hidden"
 		}
 		if !showHidden {
-			b.WriteString(fmt.Sprintf("comment #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason))
+			fmt.Fprintf(&b, "comment #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason)
 			return b.String()
 		}
 		// full content with hidden marker
 		header := formatCommentHeader(c, authorDisplay)
 		header = strings.TrimRight(header, " \n")
-		b.WriteString(fmt.Sprintf("%s | hidden: %s  \n", header, reason))
+		fmt.Fprintf(&b, "%s | hidden: %s  \n", header, reason)
 	} else {
 		b.WriteString(formatCommentHeader(c, authorDisplay))
 	}
 
-	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(c.CreatedAt)))
+	fmt.Fprintf(&b, "_%s_\n", format.Date(c.CreatedAt))
 	b.WriteString("\n")
 
 	// body text without > prefix (the caller adds > for the whole block)
@@ -187,9 +187,9 @@ func formatThreadGroup(g ReviewThreadGroup, viewerLogin string, showDiff bool, s
 	// thread header
 	location := formatLocation(g)
 	if g.IsResolved {
-		b.WriteString(fmt.Sprintf("thread #%d  %s | hidden: Resolved  \n", g.ThreadID, location))
+		fmt.Fprintf(&b, "thread #%d  %s | hidden: Resolved  \n", g.ThreadID, location)
 	} else {
-		b.WriteString(fmt.Sprintf("thread #%d  %s  \n", g.ThreadID, location))
+		fmt.Fprintf(&b, "thread #%d  %s  \n", g.ThreadID, location)
 	}
 
 	// for resolved threads, hide comment content unless showHidden is set
@@ -224,19 +224,19 @@ func formatReviewComment(c ReviewComment, viewerLogin string, showHidden bool) s
 		}
 		if !showHidden {
 			// compact header for hidden comments
-			b.WriteString(fmt.Sprintf("comment #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason))
+			fmt.Fprintf(&b, "comment #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason)
 			return b.String()
 		}
 		// full content with hidden marker — use reply format if applicable
 		header := formatCommentHeader(c, authorDisplay)
 		// trim trailing "  \n" and append hidden marker
 		header = strings.TrimRight(header, " \n")
-		b.WriteString(fmt.Sprintf("%s | hidden: %s  \n", header, reason))
+		fmt.Fprintf(&b, "%s | hidden: %s  \n", header, reason)
 	} else {
 		b.WriteString(formatCommentHeader(c, authorDisplay))
 	}
 
-	b.WriteString(fmt.Sprintf("_%s_\n", format.Date(c.CreatedAt)))
+	fmt.Fprintf(&b, "_%s_\n", format.Date(c.CreatedAt))
 	b.WriteString("\n")
 
 	commentBody := strings.TrimRight(strings.ReplaceAll(c.Body, "\r\n", "\n"), "\n")
