@@ -56,7 +56,7 @@ gh-contribute is an MVP GitHub CLI extension that lets AI agents read and intera
 - Test `resolvePR` logic with mocked PR service
 - Test `react` command validation of reaction types
 
-### 1.5 CI pipeline
+### 1.5 CI pipeline ✅
 **What**: Add `.github/workflows/ci.yml`:
 - Trigger on push and PR to `main`
 - Steps: checkout → Go setup → `make lint` → `make test` → `make build`
