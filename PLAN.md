@@ -185,7 +185,7 @@ func TestE2E(t *testing.T) {
 
 ## Phase 4: The AI Agent Workflow Loop
 
-### 4.1 Poll for new activity
+### 4.1 Poll for new activity ✅
 **Why**: The agent needs to know when a review arrives. Options:
 
 **Option A: Polling command (simplest, recommended first)**

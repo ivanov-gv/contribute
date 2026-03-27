@@ -87,6 +87,7 @@ func Execute() {
 		_app.newIssueCmd(),
 		_app.newIssueCommentCmd(),
 		_app.newIssuesCmd(),
+		_app.newWatchCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {
