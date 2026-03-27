@@ -81,6 +81,7 @@ func Execute() {
 		_app.newResolveCmd(),
 		_app.newUnresolveCmd(),
 		_app.newReviewCmd(),
+		_app.newReviewCommentCmd(),
 		_app.newThreadCmd(),
 		_app.newIssueCmd(),
 		_app.newIssuesCmd(),

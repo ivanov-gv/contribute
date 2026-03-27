@@ -21,8 +21,9 @@ type issueCommenter interface {
 	CreateComment(ctx context.Context, owner, repo string, number int, comment *ghrest.IssueComment) (*ghrest.IssueComment, *ghrest.Response, error)
 }
 
-// pullRequestCommenter creates reply comments on PR review threads
+// pullRequestCommenter creates and replies to PR review comments
 type pullRequestCommenter interface {
+	CreateComment(ctx context.Context, owner, repo string, number int, comment *ghrest.PullRequestComment) (*ghrest.PullRequestComment, *ghrest.Response, error)
 	CreateCommentInReplyTo(ctx context.Context, owner, repo string, number int, body string, commentID int64) (*ghrest.PullRequestComment, *ghrest.Response, error)
 }
 
@@ -220,6 +221,29 @@ func (s *Service) Post(prNumber int, body string) (*IssueComment, error) {
 		Author:     comment.GetUser().GetLogin(),
 		Body:       comment.GetBody(),
 		CreatedAt:  comment.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
+	}, nil
+}
+
+// PostInlineComment creates a new inline review comment on a specific file and line
+func (s *Service) PostInlineComment(prNumber int, commitSHA, path, body string, line int, side string) (*IssueComment, error) {
+	comment := &ghrest.PullRequestComment{
+		Body:     ghrest.Ptr(body),
+		CommitID: ghrest.Ptr(commitSHA),
+		Path:     ghrest.Ptr(path),
+		Line:     ghrest.Ptr(line),
+	}
+	if side != "" {
+		comment.Side = ghrest.Ptr(side)
+	}
+	created, _, err := s.pullRequests.CreateComment(context.Background(), s.owner, s.repo, prNumber, comment)
+	if err != nil {
+		return nil, fmt.Errorf("PullRequests.CreateComment [pr=%d, path='%s', line=%d]: %w", prNumber, path, line, err)
+	}
+	return &IssueComment{
+		DatabaseID: created.GetID(),
+		Author:     created.GetUser().GetLogin(),
+		Body:       created.GetBody(),
+		CreatedAt:  created.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
 	}, nil
 }
 

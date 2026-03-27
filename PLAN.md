@@ -129,7 +129,7 @@ func TestE2E(t *testing.T) {
 
 ## Phase 2: Missing Write Operations
 
-### 2.1 Reply to review comments
+### 2.1 Reply to review comments ✅
 **Why**: This is THE most important missing feature. When a reviewer leaves inline comments, the agent needs to reply to each one in-thread.
 **What**:
 - New command: `gh contribute reply <comment-id> <body>`
@@ -137,7 +137,7 @@ func TestE2E(t *testing.T) {
 - Uses REST API: `POST /repos/{owner}/{repo}/pulls/{pull_number}/comments/{comment_id}/replies`
 - Add `Reply` method to comment service (or new `reply` service)
 
-### 2.2 Post inline review comments
+### 2.2 Post inline review comments ✅
 **Why**: Agent should be able to leave its own review comments on specific lines.
 **What**:
 - New command: `gh contribute review-comment <body> --file <path> --line <n> [--side RIGHT|LEFT]`
@@ -150,7 +150,7 @@ func TestE2E(t *testing.T) {
 - New command: `gh contribute submit-review --event APPROVE|REQUEST_CHANGES|COMMENT [--body "..."]`
 - Uses REST API: `POST /repos/{owner}/{repo}/pulls/{pull_number}/reviews`
 
-### 2.4 Resolve/unresolve review threads
+### 2.4 Resolve/unresolve review threads ✅
 **Why**: After addressing a comment, the agent should resolve the thread.
 **What**:
 - New command: `gh contribute resolve <thread-id>` / `gh contribute unresolve <thread-id>`

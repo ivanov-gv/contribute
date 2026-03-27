@@ -48,7 +48,8 @@ type Info struct {
 	Labels       []string
 	Projects     []string
 	Milestone    string
-	Issues       []LinkedIssue
+	Issues        []LinkedIssue
+	HeadCommitSHA string
 }
 
 // LinkedIssue is an issue referenced by the PR
@@ -82,6 +83,7 @@ type prNode struct {
 	Body        githubv4.String
 	URL         githubv4.URI
 	HeadRefName githubv4.String
+	HeadRefOid  githubv4.String
 	BaseRefName githubv4.String
 	Locked      githubv4.Boolean
 	ChangedFiles githubv4.Int
@@ -192,9 +194,10 @@ func mapPR(n *prNode) *Info {
 		Head:         string(n.HeadRefName),
 		Base:         string(n.BaseRefName),
 		Author:       string(n.Author.Login),
-		CommitCount:  int(n.Commits.TotalCount),
-		CommentCount: int(n.TotalCommentsCount),
-		IsLocked:     bool(n.Locked),
+		CommitCount:   int(n.Commits.TotalCount),
+		CommentCount:  int(n.TotalCommentsCount),
+		IsLocked:      bool(n.Locked),
+		HeadCommitSHA: string(n.HeadRefOid),
 		ChangedFiles: int(n.ChangedFiles),
 		Additions:    int(n.Additions),
 		Deletions:    int(n.Deletions),
