@@ -1,4 +1,4 @@
-review #3929353771 by you (@ivanov-gv)  
+review #3929353771 by you (@ivanov-gv)  | hidden: Resolved  
 _2026-03-11 12:45:28_
 
 >4. A resolved review with a confused emoji reaction

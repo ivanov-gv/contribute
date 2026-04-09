@@ -325,6 +325,56 @@ Use `mock.Anything` for arguments you don't care about in a particular test.
 Use `Benchmark<Name>(b *testing.B)` for performance-sensitive code. Document results in comments above the benchmark
 function for future reference.
 
+## Linting
+
+Run with: `golangci-lint run ./...`
+
+Configuration lives in `.golangci.yml`. The linter config must **not** contain global exceptions, ignored rules, or
+suppression lists. All linter rules apply everywhere.
+
+### Magic numbers (`mnd` linter)
+
+The `mnd` linter flags numeric literals. The correct fix depends on whether the number has domain meaning:
+
+**Use a named constant** when the number has domain/business meaning — it represents a chosen value that someone might
+need to find, understand, or change:
+```go
+const deviceFlowPollInterval = 5 * time.Second // RFC 8628 §3.5
+const configDirPermissions = 0700               // owner-only access
+const defaultPageSize = 20
+const replyArgCount = 2 // <comment-id> <body>
+```
+
+**Use `//nolint:mnd`** only when the number is purely structural and has no meaning beyond the syntax — e.g. split
+counts, slice index bounds, or length checks that mirror the split:
+```go
+parts := strings.SplitN(remote, ":", 2) //nolint:mnd // split into host:path
+if len(parts) != 2 {                    //nolint:mnd // expect host and path
+```
+
+Rule of thumb: if you can give the number a meaningful name, make it a constant. If the only name you can think of is
+`two` or `splitCount`, use `//nolint:mnd`.
+
+### Handling other false positives
+
+When a linter reports a false positive, suppress it at the exact line with a `//nolint` comment that specifies the
+linter name and explains why:
+
+```go
+parts := strings.SplitN(remote, ":", 2) //nolint:mnd // split into host:path
+```
+
+Rules:
+- Always specify the linter name: `//nolint:mnd`, never bare `//nolint`.
+- Always add a `//` comment after the directive explaining **why** it is a false positive.
+- Never add global exceptions to `.golangci.yml` — each suppression must be local and justified.
+- Fix the issue instead of suppressing whenever possible.
+
+### Pay attention to linter output
+
+Before committing, run `golangci-lint run ./...` and fix every issue. The CI pipeline runs the same linter and will
+block merges on violations.
+
 ## Documentation
 
 ### README.md (for humans)
@@ -398,3 +448,72 @@ Use the `ENVIRONMENT` variable to distinguish between environments:
 - `PREPROD` — Pre-production/staging. Enables extra warnings or debug features via post-handlers in the server layer
   (e.g. appending a test environment warning to every response). The app and service layers stay unaware of the
   environment — environment-specific behavior is injected at the server layer only.
+
+---
+
+# gh-contribute
+
+A GitHub CLI extension (`gh extension`) that lets AI agents interact with PRs as real contributors.
+
+## Build & test
+
+```bash
+make build                  # compile to bin/gh-contribute
+make install                # install to $GOPATH/bin
+make test                   # unit tests (race detector)
+make test-integration-local # integration tests with mock server (no token needed)
+make test-integration       # integration tests against real GitHub (requires GH_CONTRIBUTE_TOKEN)
+make test-e2e               # full E2E against real GitHub
+make lint                   # golangci-lint
+make fmt                    # gofmt
+```
+
+## Authentication
+
+Token priority (highest to lowest): `GH_CONTRIBUTE_TOKEN` env var → GitHub App env vars → stored `app.json` → `~/.config/gh-contribute/token` file.
+
+**User (Device Flow):**
+```bash
+gh contribute auth login          # opens browser, stores token in ~/.config/gh-contribute/token
+gh contribute auth status         # show current identity
+```
+
+**GitHub App (installation token, auto-refreshed):**
+```bash
+# via env vars (CI / non-interactive)
+export GH_CONTRIBUTE_APP_ID=<id>
+export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
+# optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
+
+# via CLI (persists to ~/.config/gh-contribute/app.json)
+gh contribute auth login-app --app-id <id> --key-path /path/to/private-key.pem
+# --app-id can be omitted if GH_CONTRIBUTE_APP_ID is set
+```
+
+App credentials stored in `app.json` take precedence over the token file but lose to env vars.
+
+## Key architecture notes
+
+- `internal/client/auth/` — JWT generation, installation token exchange, Device Flow polling, `TokenProvider` (thread-safe auto-refresh).
+- `internal/config/` — token loading priority chain; `app.go` persists app credentials to `~/.config/gh-contribute/app.json`.
+- All commands auto-detect owner/repo from `git remote get-url origin` and PR number from the current branch name.
+- GraphQL (shurcooL/githubv4) for reads; REST (google/go-github) for writes.
+- Output defaults to markdown; pass `--format json` for machine-readable output.
+
+## Review-cycle workflow
+
+```bash
+gh contribute issue <n>                            # read issue
+gh contribute pr [n]                               # show PR details
+gh contribute comments --pr <n>                    # list all comments + reviews
+gh contribute review <review-id> --pr <n>          # show inline comments for a review
+gh contribute thread <thread-id> --pr <n>          # show full thread
+gh contribute comment <body> --pr <n>              # post top-level comment
+gh contribute reply <comment-id> <body> --pr <n>   # reply to a review comment
+gh contribute react <comment-id> EYES              # acknowledge
+gh contribute react <comment-id> ROCKET            # signal done
+gh contribute resolve <thread-id> --pr <n>         # resolve thread
+gh contribute review-comment <body> --file <f> --line <l> --pr <n>  # inline comment
+gh contribute submit-review --event APPROVE --pr <n>
+gh contribute watch --pr <n>                       # poll for new activity
+```

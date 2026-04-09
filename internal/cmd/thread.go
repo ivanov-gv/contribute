@@ -21,7 +21,7 @@ func (a *app) newThreadCmd() *cobra.Command {
 			prNumber, _ := cmd.Flags().GetInt("pr")
 			number, err := a.resolvePR(prNumber)
 			if err != nil {
-				return err
+				return fmt.Errorf("resolvePR [pr=%d]: %w", prNumber, err)
 			}
 
 			t, err := a.threadService.Get(number, threadID)
@@ -29,11 +29,16 @@ func (a *app) newThreadCmd() *cobra.Command {
 				return fmt.Errorf("threadService.Get [pr=%d, thread=%d]: %w", number, threadID, err)
 			}
 
-			fmt.Print(t.Format())
+			showHidden, _ := cmd.Flags().GetBool("show-hidden")
+			if outputFormat(cmd) == "json" {
+				return printJSON(t)
+			}
+			fmt.Print(t.Format(showHidden))
 			return nil
 		},
 	}
 
 	cmd.Flags().Int("pr", 0, "PR number (auto-detected from current branch if not set)")
+	cmd.Flags().Bool("show-hidden", false, "Show content of hidden/minimized comments")
 	return cmd
 }

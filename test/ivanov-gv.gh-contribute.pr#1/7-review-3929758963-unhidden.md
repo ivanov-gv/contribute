@@ -1,9 +1,9 @@
 review #3929758963 by you (@ivanov-gv)  
 _2026-03-11 13:51:01_
 
->7. A review by @ivanov-gv
+>7. A review by @ivanov-gv 
 >
->a few fixes are needed as well as some further feature implementations. looks good so far!
+>a few fixes are needed as well as some further feature implementations. looks good so far! 
 >
 >
 >thread #2918508377  TODO.md on line +48  
@@ -87,7 +87,7 @@ _2026-03-11 13:51:01_
 >- make `gh-contribute pr` take a pr id as an argument without --pr key. so `gh-contribute pr --pr 1` becomes `gh-contribute pr 1`
 >- add comment id to `comments` the same way for showing only one comment: `gh-contribute comments 4039221478`
 >
->after resolving these, add a command for viewing a review. comments in a review should be sorted by date primarily. comment branches (a comment and its replies) should be printed together, a reply after its comment. I can't imagine how yet, but branches also should be viewed differently, to make the reader understand it's a chain of comments.
+>after resolving these, add a command for viewing a review. comments in a review should be sorted by date primarily. comment branches (a comment and its replies) should be printed together, a reply after its comment. I can't imagine how yet, but branches also should be viewed differently, to make the reader understand it's a chain of comments. 
 >
 >that's it. good luck!
 

@@ -7,11 +7,13 @@ import (
 	ghrest "github.com/google/go-github/v69/github"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/shurcooL/githubv4"
 	"github.com/spf13/cobra"
 
 	ghclient "github.com/ivanov-gv/gh-contribute/internal/client/github"
 	"github.com/ivanov-gv/gh-contribute/internal/config"
 	"github.com/ivanov-gv/gh-contribute/internal/service/comment"
+	"github.com/ivanov-gv/gh-contribute/internal/service/issue"
 	"github.com/ivanov-gv/gh-contribute/internal/service/pr"
 	"github.com/ivanov-gv/gh-contribute/internal/service/reaction"
 	"github.com/ivanov-gv/gh-contribute/internal/service/review"
@@ -26,6 +28,7 @@ type app struct {
 	reactionService *reaction.Service
 	reviewService   *review.Service
 	threadService   *thread.Service
+	issueService    *issue.Service
 }
 
 // init loads config and initializes all services.
@@ -36,8 +39,15 @@ func (a *app) init() error {
 		return fmt.Errorf("config.Load: %w", err)
 	}
 
-	gql := ghclient.NewGraphQLClient(cfg.Token)
+	var gql *githubv4.Client
+	if cfg.Provider != nil {
+		gql = ghclient.NewGraphQLClientWithProvider(cfg.Provider)
+	} else {
+		gql = ghclient.NewGraphQLClient(cfg.Token)
+	}
 	rest := ghrest.NewClient(nil).WithAuthToken(cfg.Token)
+
+	log.Debug().Str("owner", cfg.Owner).Str("repo", cfg.Repo).Msg("config loaded")
 
 	a.cfg = cfg
 	a.prService = pr.NewService(gql, cfg.Owner, cfg.Repo)
@@ -45,6 +55,7 @@ func (a *app) init() error {
 	a.reactionService = reaction.NewService(rest, cfg.Owner, cfg.Repo)
 	a.reviewService = review.NewService(gql, cfg.Owner, cfg.Repo)
 	a.threadService = thread.NewService(gql, cfg.Owner, cfg.Repo)
+	a.issueService = issue.NewService(gql, cfg.Owner, cfg.Repo)
 
 	return nil
 }
@@ -62,9 +73,18 @@ func Execute() {
 		SilenceUsage: true,
 		// initialize app before any authenticated command runs
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			verbose, _ := cmd.Flags().GetBool("verbose")
+			if verbose {
+				zerolog.SetGlobalLevel(zerolog.DebugLevel)
+			} else {
+				zerolog.SetGlobalLevel(zerolog.InfoLevel)
+			}
 			return _app.init()
 		},
 	}
+
+	rootCmd.PersistentFlags().String("format", "", "Output format: json (default: markdown)")
+	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable debug logging")
 
 	rootCmd.AddCommand(
 		// auth commands override PersistentPreRunE with a no-op — no token required
@@ -74,8 +94,17 @@ func Execute() {
 		_app.newCommentsCmd(),
 		_app.newCommentCmd(),
 		_app.newReactCmd(),
+		_app.newReplyCmd(),
+		_app.newResolveCmd(),
+		_app.newUnresolveCmd(),
 		_app.newReviewCmd(),
+		_app.newReviewCommentCmd(),
+		_app.newSubmitReviewCmd(),
 		_app.newThreadCmd(),
+		_app.newIssueCmd(),
+		_app.newIssueCommentCmd(),
+		_app.newIssuesCmd(),
+		_app.newWatchCmd(),
 	)
 
 	if err := rootCmd.Execute(); err != nil {

@@ -4,20 +4,29 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 
+	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
 )
+
+// graphQLClient executes GraphQL queries and mutations
+type graphQLClient interface {
+	Query(ctx context.Context, q interface{}, variables map[string]interface{}) error
+	Mutate(ctx context.Context, m interface{}, input githubv4.Input, variables map[string]interface{}) error
+}
 
 // Service provides thread lookup operations via GraphQL
 type Service struct {
-	gql   *githubv4.Client
+	gql   graphQLClient
 	owner string
 	repo  string
 }
 
 // NewService creates a new thread service
-func NewService(gql *githubv4.Client, owner, repo string) *Service {
+func NewService(gql graphQLClient, owner, repo string) *Service {
 	return &Service{gql: gql, owner: owner, repo: repo}
 }
 
@@ -38,6 +47,7 @@ type ThreadComment struct {
 type Thread struct {
 	ThreadID          int64 // databaseId of the first comment
 	IsOutdated        bool
+	IsResolved        bool
 	Path              string
 	Line              int
 	StartLine         int
@@ -47,49 +57,40 @@ type Thread struct {
 	Comments          []ThreadComment
 }
 
-// reactionNode is a single reaction with content and author
-type reactionNode struct {
-	Content githubv4.String
-	User    struct {
-		Login githubv4.String
-	}
-}
-
-// threadCommentNode represents a comment within a review thread
-type threadCommentNode struct {
-	DatabaseID int64
-	Author     struct {
-		Login githubv4.String
-	}
-	Body            githubv4.String
-	CreatedAt       githubv4.DateTime
-	IsMinimized     githubv4.Boolean
-	MinimizedReason githubv4.String
-	ReplyTo         *struct {
-		DatabaseID int64
-	}
-	PullRequestReview *struct {
-		DatabaseID int64
-	}
-	Reactions struct {
-		Nodes []reactionNode
-	} `graphql:"reactions(first: 20)"`
-}
-
 // reviewThreadNode represents a single review thread with its comments
 type reviewThreadNode struct {
+	ID                githubv4.ID
 	IsOutdated        githubv4.Boolean
+	IsResolved        githubv4.Boolean
 	Path              githubv4.String
 	Line              *githubv4.Int
 	StartLine         *githubv4.Int
 	OriginalLine      *githubv4.Int
 	OriginalStartLine *githubv4.Int
 	Comments          struct {
-		Nodes []threadCommentNode
+		Nodes []graphql_model.ThreadCommentNode
 	} `graphql:"comments(first: 50)"`
 }
 
-// threadsQuery fetches all review threads for a PR
+// resolveThreadMutation is the GraphQL mutation for resolving a review thread
+type resolveThreadMutation struct {
+	ResolveReviewThread struct {
+		Thread struct {
+			IsResolved githubv4.Boolean
+		}
+	} `graphql:"resolveReviewThread(input: $input)"`
+}
+
+// unresolveThreadMutation is the GraphQL mutation for unresolving a review thread
+type unresolveThreadMutation struct {
+	UnresolveReviewThread struct {
+		Thread struct {
+			IsResolved githubv4.Boolean
+		}
+	} `graphql:"unresolveReviewThread(input: $input)"`
+}
+
+// threadsQuery fetches review threads for a PR, one page at a time.
 type threadsQuery struct {
 	Viewer struct {
 		Login githubv4.String
@@ -97,27 +98,52 @@ type threadsQuery struct {
 	Repository struct {
 		PullRequest struct {
 			ReviewThreads struct {
-				Nodes []reviewThreadNode
-			} `graphql:"reviewThreads(first: 100)"`
+				Nodes    []reviewThreadNode
+				PageInfo pagination.PageInfo
+			} `graphql:"reviewThreads(first: 100, after: $cursor)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// Get returns the full thread identified by threadID (the databaseId of the first comment).
-func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
+// fetchAllThreads fetches every review thread for prNumber across all pages.
+// Returns the viewer login (from the first page) and all thread nodes.
+func (s *Service) fetchAllThreads(prNumber int) (string, []reviewThreadNode, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(prNumber),
+		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
+		"cursor": (*githubv4.String)(nil),
 	}
 
-	var query threadsQuery
-	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-		return nil, fmt.Errorf("gql.Query [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	var viewerLogin string
+	var allNodes []reviewThreadNode
+
+	for {
+		var query threadsQuery
+		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+			return "", nil, fmt.Errorf("gql.Query [pr=%d]: %w", prNumber, err)
+		}
+		if viewerLogin == "" {
+			viewerLogin = string(query.Viewer.Login)
+		}
+		allNodes = append(allNodes, query.Repository.PullRequest.ReviewThreads.Nodes...)
+		if !query.Repository.PullRequest.ReviewThreads.PageInfo.HasMore() {
+			break
+		}
+		variables["cursor"] = query.Repository.PullRequest.ReviewThreads.PageInfo.Cursor()
 	}
 
-	viewerLogin := string(query.Viewer.Login)
-	for _, n := range query.Repository.PullRequest.ReviewThreads.Nodes {
+	return viewerLogin, allNodes, nil
+}
+
+// Get returns the full thread identified by threadID (the databaseId of the first comment).
+func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
+	viewerLogin, allNodes, err := s.fetchAllThreads(prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("fetchAllThreads [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+
+	for _, n := range allNodes {
 		if len(n.Comments.Nodes) == 0 || n.Comments.Nodes[0].DatabaseID != threadID {
 			continue
 		}
@@ -127,10 +153,64 @@ func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
 	return nil, fmt.Errorf("thread #%d not found in PR #%d", threadID, prNumber)
 }
 
+// Resolve marks a review thread as resolved.
+// threadID is the database ID of the first comment in the thread.
+func (s *Service) Resolve(prNumber int, threadID int64) error {
+	nodeID, err := s.findThreadNodeID(prNumber, threadID)
+	if err != nil {
+		return fmt.Errorf("findThreadNodeID [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+
+	var mutation resolveThreadMutation
+	input := githubv4.ResolveReviewThreadInput{
+		ThreadID: nodeID,
+	}
+	if err := s.gql.Mutate(context.Background(), &mutation, input, nil); err != nil {
+		return fmt.Errorf("gql.Mutate resolveReviewThread [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+	return nil
+}
+
+// Unresolve marks a review thread as unresolved.
+// threadID is the database ID of the first comment in the thread.
+func (s *Service) Unresolve(prNumber int, threadID int64) error {
+	nodeID, err := s.findThreadNodeID(prNumber, threadID)
+	if err != nil {
+		return fmt.Errorf("findThreadNodeID [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+
+	var mutation unresolveThreadMutation
+	input := githubv4.UnresolveReviewThreadInput{
+		ThreadID: nodeID,
+	}
+	if err := s.gql.Mutate(context.Background(), &mutation, input, nil); err != nil {
+		return fmt.Errorf("gql.Mutate unresolveReviewThread [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+	return nil
+}
+
+// findThreadNodeID fetches all threads for a PR and returns the GraphQL node ID
+// of the thread whose first comment has the given database ID.
+func (s *Service) findThreadNodeID(prNumber int, threadID int64) (githubv4.ID, error) {
+	_, allNodes, err := s.fetchAllThreads(prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("fetchAllThreads [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+
+	node, ok := lo.Find(allNodes, func(n reviewThreadNode) bool {
+		return len(n.Comments.Nodes) > 0 && n.Comments.Nodes[0].DatabaseID == threadID
+	})
+	if !ok {
+		return nil, fmt.Errorf("thread #%d not found in PR #%d", threadID, prNumber)
+	}
+	return node.ID, nil
+}
+
 func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread {
 	t := &Thread{
 		ThreadID:    threadID,
 		IsOutdated:  bool(n.IsOutdated),
+		IsResolved:  bool(n.IsResolved),
 		Path:        string(n.Path),
 		ViewerLogin: viewerLogin,
 	}
@@ -155,7 +235,7 @@ func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread
 			CreatedAt:       c.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			IsMinimized:     bool(c.IsMinimized),
 			MinimizedReason: string(c.MinimizedReason),
-			Reactions:       mapReactions(c.Reactions.Nodes),
+			Reactions:       graphql_model.MapReactions(c.Reactions.Nodes),
 		}
 		if c.ReplyTo != nil {
 			tc.ReplyToID = c.ReplyTo.DatabaseID
@@ -166,12 +246,4 @@ func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread
 		t.Comments = append(t.Comments, tc)
 	}
 	return t
-}
-
-func mapReactions(nodes []reactionNode) []format.Reaction {
-	reactions := make([]format.Reaction, len(nodes))
-	for i, n := range nodes {
-		reactions[i] = format.Reaction{Content: string(n.Content), Author: string(n.User.Login)}
-	}
-	return reactions
 }
