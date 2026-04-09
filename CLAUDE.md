@@ -470,32 +470,28 @@ make fmt                    # gofmt
 
 ## Authentication
 
-Token priority (highest to lowest): `GH_CONTRIBUTE_TOKEN` env var → GitHub App env vars → stored `app.json` → `~/.config/gh-contribute/token` file.
-
-**User (Device Flow):**
-```bash
-gh contribute auth login          # opens browser, stores token in ~/.config/gh-contribute/token
-gh contribute auth status         # show current identity
-```
+Token priority (highest to lowest): `GH_CONTRIBUTE_TOKEN` env var → GitHub App env vars → stored `~/.config/gh-contribute/app.json`.
 
 **GitHub App (installation token, auto-refreshed):**
 ```bash
-# via env vars (CI / non-interactive)
+# via env vars — auto-login on startup (CI / non-interactive)
 export GH_CONTRIBUTE_APP_ID=<id>
 export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
 # optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
 
-# via CLI (persists to ~/.config/gh-contribute/app.json)
+# via CLI — persists to ~/.config/gh-contribute/app.json
 gh contribute auth login-app --app-id <id> --key-path /path/to/private-key.pem
 # --app-id can be omitted if GH_CONTRIBUTE_APP_ID is set
+
+gh contribute auth status         # show current app identity
 ```
 
-App credentials stored in `app.json` take precedence over the token file but lose to env vars.
+If no credentials are configured, all commands exit with a non-zero code and an error pointing to `auth login-app`.
 
 ## Key architecture notes
 
-- `internal/client/auth/` — JWT generation, installation token exchange, Device Flow polling, `TokenProvider` (thread-safe auto-refresh).
-- `internal/config/` — token loading priority chain; `app.go` persists app credentials to `~/.config/gh-contribute/app.json`.
+- `internal/client/auth/` — JWT generation, installation token exchange, `TokenProvider` (thread-safe auto-refresh).
+- `internal/config/` — `app.go` aggregates app credential sources (env vars + stored `app.json`); `token.go` handles priority chain and returns `ErrNotAuthenticated` when nothing is configured.
 - All commands auto-detect owner/repo from `git remote get-url origin` and PR number from the current branch name.
 - GraphQL (shurcooL/githubv4) for reads; REST (google/go-github) for writes.
 - Output defaults to markdown; pass `--format json` for machine-readable output.

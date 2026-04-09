@@ -4,9 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -15,7 +13,7 @@ import (
 	"github.com/ivanov-gv/gh-contribute/internal/config"
 )
 
-// newAuthCmd returns the "auth" parent command with login, login-app, and status subcommands.
+// newAuthCmd returns the "auth" parent command with login-app and status subcommands.
 func newAuthCmd() *cobra.Command {
 	authCmd := &cobra.Command{
 		Use:   "auth",
@@ -23,39 +21,8 @@ func newAuthCmd() *cobra.Command {
 		// skip app initialization — auth commands do not require a stored token
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 	}
-	authCmd.AddCommand(newAuthLoginCmd(), newAuthLoginAppCmd(), newAuthStatusCmd())
+	authCmd.AddCommand(newAuthLoginAppCmd(), newAuthStatusCmd())
 	return authCmd
-}
-
-// newAuthLoginCmd initiates the Device Authorization Flow and stores the resulting token.
-func newAuthLoginCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "login",
-		Short: "Authenticate via GitHub App Device Authorization Flow",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			const logfmt = "auth login: "
-
-			token, err := auth.RunDeviceFlow(func(userCode, verificationURI string) {
-				// print URL and code to stdout so the user can act on them
-				fmt.Printf("Open: %s\nEnter code: %s\n", verificationURI, userCode)
-
-				// best-effort: try to open the browser
-				openBrowser(verificationURI)
-
-				log.Info().Msg(logfmt + "waiting for authorization...")
-			})
-			if err != nil {
-				return fmt.Errorf(logfmt+"auth.RunDeviceFlow: %w", err)
-			}
-
-			if err := config.SaveToken(token); err != nil {
-				return fmt.Errorf(logfmt+"config.SaveToken: %w", err)
-			}
-
-			log.Info().Msg(logfmt + "authentication successful")
-			return nil
-		},
-	}
 }
 
 // newAuthLoginAppCmd stores GitHub App credentials for non-interactive authentication.
@@ -140,7 +107,7 @@ Example:
 	return cmd
 }
 
-// newAuthStatusCmd prints the authentication identity (username for user tokens, app name for app tokens).
+// newAuthStatusCmd prints the app name and ID for the active GitHub App authentication.
 func newAuthStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
@@ -148,55 +115,22 @@ func newAuthStatusCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			const logfmt = "auth status: "
 
-			// check for stored app credentials first — app tokens cannot call /user
-			appID, keyPath, err := config.LoadStoredAppCredentials()
+			// load app config from env vars (highest priority) or stored file
+			appCfg, err := config.LoadAppConfig()
 			if err != nil {
-				return fmt.Errorf(logfmt+"config.LoadStoredAppCredentials: %w", err)
+				return fmt.Errorf(logfmt+"config.LoadAppConfig: %w", err)
 			}
-			if appID != 0 && keyPath != "" {
-				appCfg, err := auth.LoadAppConfigFromPath(appID, keyPath, 0)
-				if err != nil {
-					return fmt.Errorf(logfmt+"auth.LoadAppConfigFromPath: %w", err)
-				}
-				name, err := auth.GetAppName(context.Background(), appCfg.AppID, appCfg.PrivateKey)
-				if err != nil {
-					return fmt.Errorf(logfmt+"auth.GetAppName: %w", err)
-				}
-				log.Info().Str("app", name).Int64("app_id", appID).Msg(logfmt + "logged in as app")
-				return nil
+			if appCfg == nil {
+				return fmt.Errorf(logfmt + "not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute auth login-app'")
 			}
 
-			// fall back to user token
-			token, err := config.LoadToken()
+			appName, err := auth.GetAppName(context.Background(), appCfg.AppID, appCfg.PrivateKey)
 			if err != nil {
-				return fmt.Errorf(logfmt+"config.LoadToken: %w", err)
+				return fmt.Errorf(logfmt+"auth.GetAppName: %w", err)
 			}
 
-			username, err := auth.GetUsername(context.Background(), token)
-			if err != nil {
-				return fmt.Errorf(logfmt+"auth.GetUsername: %w", err)
-			}
-
-			log.Info().Str("username", username).Msg(logfmt + "logged in")
+			log.Info().Str("app", appName).Int64("app_id", appCfg.AppID).Msg(logfmt + "logged in as app")
 			return nil
 		},
-	}
-}
-
-// openBrowser attempts to open uri in the user's default browser.
-// Failures are logged at debug level — the user can always open the URL manually.
-func openBrowser(uri string) {
-	var cmd string
-	switch runtime.GOOS {
-	case "linux":
-		cmd = "xdg-open"
-	case "darwin":
-		cmd = "open"
-	default:
-		log.Debug().Str("os", runtime.GOOS).Msg("openBrowser: unsupported OS, please open URL manually")
-		return
-	}
-	if err := exec.CommandContext(context.Background(), cmd, uri).Start(); err != nil { //nolint:gosec // cmd is a trusted constant ("xdg-open" or "open")
-		log.Debug().Err(err).Msg("openBrowser: could not open browser, please open URL manually")
 	}
 }
