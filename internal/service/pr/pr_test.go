@@ -45,7 +45,7 @@ func TestMapPR(t *testing.T) {
 		parsedURL, _ := url.Parse("https://github.com/owner/repo/pull/42")
 		node.URL = githubv4.URI{URL: parsedURL}
 
-		info := mapPR(node)
+		info := fromPRNode(node)
 
 		assert.Equal(t, 42, info.Number)
 		assert.Equal(t, "Add feature X", info.Title)
@@ -73,14 +73,14 @@ func TestMapPR(t *testing.T) {
 			Milestone: nil,
 			URL:       githubv4.URI{URL: emptyURL},
 		}
-		info := mapPR(node)
+		info := fromPRNode(node)
 		assert.Equal(t, "", info.Milestone)
 	})
 
 	t.Run("empty lists", func(t *testing.T) {
 		emptyURL, _ := url.Parse("")
 		node := &prNode{URL: githubv4.URI{URL: emptyURL}}
-		info := mapPR(node)
+		info := fromPRNode(node)
 		assert.Nil(t, info.Reviewers)
 		assert.Nil(t, info.Assignees)
 		assert.Nil(t, info.Labels)
@@ -102,14 +102,14 @@ func TestMapPR(t *testing.T) {
 		// team reviewer
 		node.ReviewRequests.Nodes[1].RequestedReviewer.Team.Name = "core-team"
 
-		info := mapPR(node)
+		info := fromPRNode(node)
 		assert.Equal(t, []string{"@bob", "core-team"}, info.Reviewers)
 	})
 
 	t.Run("state normalized to lowercase", func(t *testing.T) {
 		emptyURL, _ := url.Parse("")
 		node := &prNode{State: "CLOSED", URL: githubv4.URI{URL: emptyURL}}
-		info := mapPR(node)
+		info := fromPRNode(node)
 		assert.Equal(t, "closed", info.State)
 	})
 }

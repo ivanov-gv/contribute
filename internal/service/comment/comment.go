@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	ghrest "github.com/google/go-github/v69/github"
+	"github.com/rs/zerolog/log"
 	"github.com/shurcooL/githubv4"
 
 	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
@@ -132,13 +133,16 @@ type commentsQuery struct {
 	Repository struct {
 		PullRequest struct {
 			Comments struct {
-				Nodes []issueCommentNode
+				Nodes    []issueCommentNode
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"comments(first: 100)"`
 			Reviews struct {
-				Nodes []reviewNode
+				Nodes    []reviewNode
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"reviews(first: 100)"`
 			ReviewThreads struct {
-				Nodes []reviewThreadSummaryNode
+				Nodes    []reviewThreadSummaryNode
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
@@ -157,6 +161,17 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 	}
 
 	pr := query.Repository.PullRequest
+
+	// warn when results are truncated — caller sees partial data
+	if bool(pr.Comments.PageInfo.HasNextPage) {
+		log.Warn().Int("pr", prNumber).Msg("issue comments truncated at 100 — output is incomplete")
+	}
+	if bool(pr.Reviews.PageInfo.HasNextPage) {
+		log.Warn().Int("pr", prNumber).Msg("reviews truncated at 100 — output is incomplete")
+	}
+	if bool(pr.ReviewThreads.PageInfo.HasNextPage) {
+		log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — output is incomplete")
+	}
 
 	var issueComments []IssueComment
 	for _, n := range pr.Comments.Nodes {

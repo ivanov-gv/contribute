@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/rs/zerolog/log"
 	"github.com/shurcooL/githubv4"
 
 	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
@@ -96,7 +97,8 @@ type threadsQuery struct {
 	Repository struct {
 		PullRequest struct {
 			ReviewThreads struct {
-				Nodes []reviewThreadNode
+				Nodes    []reviewThreadNode
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
@@ -113,6 +115,10 @@ func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
 	var query threadsQuery
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	}
+
+	if bool(query.Repository.PullRequest.ReviewThreads.PageInfo.HasNextPage) {
+		log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — thread may not be found")
 	}
 
 	viewerLogin := string(query.Viewer.Login)

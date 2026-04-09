@@ -149,7 +149,7 @@ func (s *Service) Get(number int) (*Info, error) {
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [number=%d]: %w", number, err)
 	}
-	return mapPR(&query.Repository.PullRequest), nil
+	return fromPRNode(&query.Repository.PullRequest), nil
 }
 
 // findByBranchQuery defines the GraphQL query shape for finding a PR by branch
@@ -181,8 +181,8 @@ func (s *Service) FindByBranch(branch string) (int, error) {
 	return int(nodes[0].Number), nil
 }
 
-// mapPR converts the GraphQL response to our Info type
-func mapPR(n *prNode) *Info {
+// fromPRNode converts the GraphQL response to our Info type
+func fromPRNode(n *prNode) *Info {
 	info := &Info{
 		Number:        int(n.Number),
 		Title:         string(n.Title),

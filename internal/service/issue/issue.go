@@ -119,7 +119,7 @@ func (s *Service) Get(number int) (*Info, error) {
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [number=%d]: %w", number, err)
 	}
-	return mapIssue(&query.Repository.Issue), nil
+	return fromIssueNode(&query.Repository.Issue), nil
 }
 
 // ListItem holds summary info for issue listing
@@ -189,26 +189,25 @@ func (s *Service) List(limit int, labels []string) ([]ListItem, error) {
 
 		var query issueListQuery
 		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-			return nil, fmt.Errorf("gql.Query: %w", err)
+			return nil, fmt.Errorf("gql.Query [labels='%v']: %w", labels, err)
 		}
 		nodes = query.Repository.Issues.Nodes
 	} else {
-		variables["labels"] = ([]*githubv4.String)(nil)
-		var query issueListQuery
+		var query issueListQueryNoLabel
 		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-			return nil, fmt.Errorf("gql.Query: %w", err)
+			return nil, fmt.Errorf("gql.Query [no labels]: %w", err)
 		}
 		nodes = query.Repository.Issues.Nodes
 	}
 
 	items := make([]ListItem, len(nodes))
 	for i, n := range nodes {
-		items[i] = mapListItem(&n)
+		items[i] = fromIssueListNode(&n)
 	}
 	return items, nil
 }
 
-func mapIssue(n *issueNode) *Info {
+func fromIssueNode(n *issueNode) *Info {
 	info := &Info{
 		Number:       int(n.Number),
 		Title:        string(n.Title),
@@ -258,7 +257,7 @@ func mapIssue(n *issueNode) *Info {
 	return info
 }
 
-func mapListItem(n *issueListNode) ListItem {
+func fromIssueListNode(n *issueListNode) ListItem {
 	item := ListItem{
 		Number:   int(n.Number),
 		Title:    string(n.Title),

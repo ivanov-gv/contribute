@@ -447,6 +447,260 @@ PR #1 is locked — write operations cannot be tested against it without error. 
 
 ---
 
+## Phase 8: Refactoring — Bug Fixes and Guideline Compliance
+
+Findings from code review and guideline audit of `claude/plan-ai-workflow-X2H3j`.
+
+- [x] 8.1 Fix retry transport body drain
+- [x] 8.2 Fix `issueListQueryNoLabel` dead code
+- [x] 8.3 Wire `TokenProvider`; fix `watch` token expiry
+- [ ] 8.4 Wire pagination or remove dead `pagination` package
+- [x] 8.5 Remove dead `model/errors` package
+- [x] 8.6 Fix `rateLimitTransport` retrying all 403s
+- [x] 8.7 Fix `make release-build` (tabs + missing build flags)
+- [x] 8.8 Fix `watch` loop (signal handling, error backoff, unbounded map)
+- [x] 8.9 Fix integration test build tag separation
+- [x] 8.10 Fix silent data truncation (add `hasNextPage` checks)
+- [x] 8.11 Add mandatory `main.go` opening comment
+- [x] 8.12 Rename mapper functions to `from<Source>` convention
+- [x] 8.13 Move `ErrNotAuthenticated` to `errors.go`
+- [ ] 8.14 Replace manual collection loops with `samber/lo`
+- [x] 8.15 Fix repeated `gql.Query` calls missing distinguishing error context
+
+---
+
+### 8.1 Fix retry transport body drain (GraphQL POSTs silently break on retry) ✅
+
+**File**: `internal/client/github/graphql.go:35-84`
+**Severity**: Critical bug
+
+`rateLimitTransport.RoundTrip` clones the request once before the retry loop. `http.Request.Clone`
+does not deep-copy the body — it copies the `io.ReadCloser` reference. After the first round-trip
+the body is drained, so every retry sends an empty POST body. All GraphQL operations use POST,
+so the rate-limit retry logic is silently broken: retries get a GraphQL parse error, not the
+original response. The existing unit tests use GET requests and never exercise this path.
+
+**Fix**: Call `req.GetBody()` at the top of each retry iteration to restore the body before sending.
+
+---
+
+### 8.2 Fix `issueListQueryNoLabel` dead code / wrong query in no-label branch ✅
+
+**File**: `internal/service/issue/issue.go:195-202`
+**Severity**: Critical bug
+
+The no-labels branch constructs an `issueListQuery` (the labeled variant) and passes it with an
+empty `$labels` variable. `issueListQueryNoLabel` is defined but never referenced anywhere.
+Depending on how GitHub handles `labels: []`, this may silently return zero results.
+
+**Fix**: Use `issueListQueryNoLabel` in the no-label branch and remove `variables["labels"]` from
+that path. Delete the dead type if it becomes unused.
+
+---
+
+### 8.3 Wire `TokenProvider` into auth path; fix `watch` token expiry ✅
+
+**Files**: `internal/config/token.go:34-51`, `internal/client/auth/provider.go`, `internal/cmd/root.go:36-42`, `internal/cmd/watch.go`
+**Severity**: Critical bug
+
+`LoadToken` performs two HTTP round-trips (JWT + installation token) on every CLI invocation
+instead of going through the caching `TokenProvider`. More critically, the `watch` command loads a
+token once at startup. GitHub installation tokens expire after 1 hour; past that point every poll
+fails with 401 and the watch loop continues indefinitely, logging "error polling" with no backoff
+and no exit.
+
+**Fix**:
+- Wire `TokenProvider` into the GraphQL client constructor so tokens are refreshed transparently
+  on each request (or at minimum before expiry).
+- In `watch`, detect 401/token-expired errors explicitly and re-authenticate rather than continuing.
+
+---
+
+### 8.4 Wire pagination or remove the dead `pagination` package
+
+**File**: `internal/utils/pagination/pagination.go`; all service files
+**Severity**: Important — silent data loss
+
+The `pagination` package has zero imports anywhere. Every service uses hard-coded `first: 100` or
+`first: 50` with no cursor-based pagination and no `pageInfo.hasNextPage` check. PRs or issues
+with more items silently truncate. The `watch` command is most affected — activity past the first
+100 comments is never detected.
+
+**Fix**: Either wire the pagination helper into all service queries (preferred), or delete the
+package and add a warning log when `pageInfo.hasNextPage` is true. At minimum, add
+`pageInfo { hasNextPage }` to all GraphQL queries and log a warning when data is truncated.
+
+---
+
+### 8.5 Remove dead `model/errors` package or wire it in ✅
+
+**File**: `internal/model/errors/errors.go`
+**Severity**: Important
+
+`RateLimitedError`, `NotFoundError`, `ErrPermissionDenied`, `ErrTokenExpired`, and all helper
+functions (`IsNotFound`, `IsRateLimited`) are defined but never returned, wrapped, or checked
+anywhere. `rateLimitTransport` returns the raw HTTP response on final failure (`err=nil`), not a
+typed error, so the types are unreachable even in principle.
+
+**Fix**: Either delete the package, or replace flat `fmt.Errorf` strings in the transport and
+services with the structured types and update call sites to use `IsNotFound` / `IsRateLimited`.
+
+---
+
+### 8.6 Fix `rateLimitTransport` retrying all 403s ✅
+
+**File**: `internal/client/github/graphql.go:58`
+**Severity**: Important — 14-second UX penalty on permission errors
+
+The transport retries on both `403 Forbidden` and `429 Too Many Requests` unconditionally. GitHub
+returns 403 for many non-rate-limit reasons (missing scope, SSO not authorized, resource denied).
+With `maxRetries=4` and exponential backoff (2s → 4s → 8s) this burns ~14 seconds and 4
+identical API calls before surfacing a permission error.
+
+**Fix**: Only retry 403 when `X-RateLimit-Remaining: 0` or a `Retry-After` header is present
+(GitHub's documented rate-limit signal). Return immediately on other 403s.
+
+---
+
+### 8.7 Fix `make release-build` — spaces instead of tabs, missing build flags ✅
+
+**File**: `Makefile:52-58`
+**Severity**: Important — release target is broken
+
+Two issues:
+1. Lines 54-58 in the `release-build` recipe are indented with spaces, not tabs. GNU make fails
+   with `*** missing separator. Stop.`
+2. Missing required build flags per the build guideline:
+   - `-ldflags="-s -w"` (strip debug info)
+   - `-trimpath` (remove local paths from binary)
+   - `-X` ldflags for version injection (`git describe`, `git rev-parse`)
+
+**Fix**: Re-indent with tabs; add the missing flags to all three `go build` invocations; add
+version injection via `$(shell git describe --tags --always)` and `$(shell git rev-parse --short HEAD)`.
+
+---
+
+### 8.8 Fix `watch` loop — no signal handling, no error backoff, unbounded map ✅
+
+**File**: `internal/cmd/watch.go:61-91`
+**Severity**: Important
+
+Three problems:
+1. `time.Sleep(interval)` is not cancellable. SIGINT terminates mid-sleep without cleanup.
+   No `context.Context` is passed to the GraphQL client.
+2. All errors (expired token, revoked access, network partition) are swallowed with `continue`.
+   The loop runs forever with no backoff or exit on repeated failures.
+3. `knownIDs` grows unbounded for the process lifetime.
+
+**Fix**:
+- Use `signal.NotifyContext(ctx, os.Interrupt)` and replace `time.Sleep` with a
+  `select { case <-ctx.Done(): return; case <-time.After(interval): }`.
+- Count consecutive errors; after N failures apply exponential backoff and exit or surface the error.
+- Cap `knownIDs` or bound its growth (e.g. keep only the last N IDs seen).
+
+---
+
+### 8.9 Fix integration test build tag separation ✅
+
+**Files**: `test/integration/`
+**Severity**: Important — real-API and mock tests interleave
+
+`integration_test.go` has `//go:build integration` and defines the real-API `Suite`. Several other
+files (`cross_service_test.go`, `error_test.go`, `issue_test.go`, `reaction_test.go`,
+`writes_test.go`) have no build tag but attach methods to `EdgeCaseSuite`. Running
+`make test-integration` compiles both suites in the same binary, so real-API and mock tests run
+interleaved in the same process.
+
+**Fix**: Give each file a consistent build tag strategy. Either:
+- Move `EdgeCaseSuite` and all mock-server tests to a subdirectory without the `integration` tag, or
+- Add `//go:build !integration` to all mock-server files and `//go:build integration` to all
+  real-API files and run them as separate targets.
+
+---
+
+### 8.10 Fix silent data truncation in GraphQL queries (no `hasNextPage` check) ✅
+
+**Files**: `internal/service/review/review.go:134,151`, `internal/service/comment/comment.go:136-142`, `internal/service/thread/thread.go:100`
+**Severity**: Important — silent data loss, wrong output
+
+`reviewThreads(first: 100)` silently drops any thread past the 100th with no warning. A review
+touching thread #101+ shows "no threads for this review" — incorrect output, not truncation. No
+`pageInfo { hasNextPage }` field is fetched in any query.
+
+**Fix**: Add `pageInfo { hasNextPage }` to all affected queries. If `hasNextPage` is true, either
+follow the cursor (preferred, see 8.4) or log a warning so the caller knows the output is partial.
+
+---
+
+### 8.11 Add mandatory `main.go` opening comment ✅
+
+**File**: `cmd/gh-contribute/main.go`
+**Severity**: Guideline violation
+
+The coding guideline requires: *"Main.go file must begin with a comment about how beautiful the
+code in the repo is."* The file has no comment.
+
+**Fix**: Add an opening comment to `main.go`.
+
+---
+
+### 8.12 Rename mapper functions to follow convention ✅
+
+**Files**: `internal/service/issue/issue.go:211,261`, `internal/service/pr/pr.go:185`, `internal/service/review/review.go:316`
+**Severity**: Guideline violation
+
+The guideline requires mapper functions to be named `<Source>To<Target>`, `from<Source>`, or
+`to<Target>`. All four functions use the wrong `map*` prefix:
+- `mapIssue` → `fromIssueNode`
+- `mapListItem` → `fromIssueListNode`
+- `mapPR` → `fromPRNode`
+- `mapReviewComment` → `fromReviewCommentNode`
+
+**Fix**: Rename all four functions to follow the `from<Source>` convention.
+
+---
+
+### 8.13 Move `ErrNotAuthenticated` to `errors.go` ✅
+
+**File**: `internal/config/token.go:14`
+**Severity**: Guideline violation
+
+The guideline requires sentinel errors to be declared in `errors.go` within their package. There
+is no `internal/config/errors.go` — `ErrNotAuthenticated` is declared in `token.go`.
+
+**Fix**: Create `internal/config/errors.go` and move the `ErrNotAuthenticated` declaration there.
+
+---
+
+### 8.14 Replace manual collection loops with `samber/lo`
+
+**Files**: `internal/service/review/review.go`, `internal/service/comment/comment.go`, `internal/service/issue/issue.go`, others
+**Severity**: Guideline violation
+
+The guideline requires using `github.com/samber/lo` (`lo.Map`, `lo.Filter`, `lo.Flatten`, etc.)
+instead of manual loops when the intent is clearer with a functional style. The codebase has zero
+`samber/lo` usage despite extensive use of collection transforms.
+
+**Fix**: Audit all manual `for` loops that are pure transforms or filters and replace them with
+the appropriate `lo.*` call. Add `samber/lo` to `go.mod` if not already present.
+
+---
+
+### 8.15 Fix repeated `gql.Query` calls missing distinguishing error context ✅
+
+**File**: `internal/service/issue/issue.go:192,199`
+**Severity**: Guideline violation
+
+The guideline states: *"If a function is called more than once in the same scope, then make those
+calls and errors distinguishable."* Both the labeled and no-label branches return
+`fmt.Errorf("gql.Query: %w", err)` with no parameter context to tell them apart in logs.
+
+**Fix**: Add the distinguishing parameter to each error, e.g.:
+- `fmt.Errorf("gql.Query [labels='%v']: %w", labels, err)`
+- `fmt.Errorf("gql.Query [no labels]: %w", err)`
+
+---
+
 ## Execution Order
 
 | Priority | Phase | Effort | Impact |

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/rs/zerolog/log"
 	"github.com/shurcooL/githubv4"
 
 	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
@@ -130,10 +131,12 @@ type allReviewsQueryNoDiff struct {
 	Repository struct {
 		PullRequest struct {
 			Reviews struct {
-				Nodes []reviewMetaNode
+				Nodes    []reviewMetaNode
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"reviews(first: 100)"`
 			ReviewThreads struct {
-				Nodes []reviewThreadNodeNoDiff
+				Nodes    []reviewThreadNodeNoDiff
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
@@ -147,10 +150,12 @@ type allReviewsQueryWithDiff struct {
 	Repository struct {
 		PullRequest struct {
 			Reviews struct {
-				Nodes []reviewMetaNode
+				Nodes    []reviewMetaNode
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"reviews(first: 100)"`
 			ReviewThreads struct {
-				Nodes []reviewThreadNodeWithDiff
+				Nodes    []reviewThreadNodeWithDiff
+				PageInfo struct{ HasNextPage githubv4.Boolean }
 			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
@@ -171,17 +176,30 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*Rev
 		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
 		}
-		meta := findReviewMeta(query.Repository.PullRequest.Reviews.Nodes, reviewDatabaseID)
+		pr := query.Repository.PullRequest
+		if bool(pr.Reviews.PageInfo.HasNextPage) {
+			log.Warn().Int("pr", prNumber).Msg("reviews truncated at 100 — output is incomplete")
+		}
+		if bool(pr.ReviewThreads.PageInfo.HasNextPage) {
+			log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — output is incomplete")
+		}
+		meta := findReviewMeta(pr.Reviews.Nodes, reviewDatabaseID)
 		if meta == nil {
 			return nil, fmt.Errorf("review #%d not found in PR #%d", reviewDatabaseID, prNumber)
 		}
-		groups := collectGroupsWithDiff(query.Repository.PullRequest.ReviewThreads.Nodes, reviewDatabaseID)
+		groups := collectGroupsWithDiff(pr.ReviewThreads.Nodes, reviewDatabaseID)
 		return buildReviewDetail(meta, string(query.Viewer.Login), groups), nil
 	}
 
 	var query allReviewsQueryNoDiff
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
+	}
+	if bool(query.Repository.PullRequest.Reviews.PageInfo.HasNextPage) {
+		log.Warn().Int("pr", prNumber).Msg("reviews truncated at 100 — output is incomplete")
+	}
+	if bool(query.Repository.PullRequest.ReviewThreads.PageInfo.HasNextPage) {
+		log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — output is incomplete")
 	}
 	meta := findReviewMeta(query.Repository.PullRequest.Reviews.Nodes, reviewDatabaseID)
 	if meta == nil {
@@ -240,7 +258,7 @@ func buildGroupNoDiff(n reviewThreadNodeNoDiff, reviewDatabaseID int64) (ReviewT
 	// build set of this review's comment IDs for external-reply detection
 	reviewIDs := commentIDSet(reviewComments)
 	for _, c := range reviewComments {
-		rc := mapReviewComment(c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt,
+		rc := fromReviewCommentNode(c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt,
 			c.IsMinimized, c.MinimizedReason, c.ReplyTo, c.Reactions.Nodes, reviewIDs)
 		group.Comments = append(group.Comments, rc)
 	}
@@ -265,7 +283,7 @@ func buildGroupWithDiff(n reviewThreadNodeWithDiff, reviewDatabaseID int64) (Rev
 	}
 	reviewIDs := commentIDSet(reviewComments)
 	for _, c := range reviewComments {
-		rc := mapReviewComment(c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt,
+		rc := fromReviewCommentNode(c.DatabaseID, c.Author.Login, c.Body, c.CreatedAt,
 			c.IsMinimized, c.MinimizedReason, c.ReplyTo, c.Reactions.Nodes, reviewIDs)
 		group.Comments = append(group.Comments, rc)
 	}
@@ -313,7 +331,7 @@ func commentIDSet[C interface{ GetID() int64 }](comments []C) map[int64]struct{}
 	return ids
 }
 
-func mapReviewComment(
+func fromReviewCommentNode(
 	databaseID int64,
 	authorLogin githubv4.String,
 	body githubv4.String,

@@ -161,7 +161,7 @@ func TestSortedGroups(t *testing.T) {
 
 func TestMapReviewComment(t *testing.T) {
 	t.Run("thread root", func(t *testing.T) {
-		rc := mapReviewComment(
+		rc := fromReviewCommentNode(
 			100,
 			githubv4.String("alice"),
 			githubv4.String("Comment body"),
@@ -182,7 +182,7 @@ func TestMapReviewComment(t *testing.T) {
 
 	t.Run("reply within same review", func(t *testing.T) {
 		reviewIDs := map[int64]struct{}{100: {}, 200: {}}
-		rc := mapReviewComment(
+		rc := fromReviewCommentNode(
 			200,
 			githubv4.String("bob"),
 			githubv4.String("Reply"),
@@ -200,7 +200,7 @@ func TestMapReviewComment(t *testing.T) {
 
 	t.Run("reply to external comment", func(t *testing.T) {
 		reviewIDs := map[int64]struct{}{200: {}}
-		rc := mapReviewComment(
+		rc := fromReviewCommentNode(
 			200,
 			githubv4.String("bob"),
 			githubv4.String("Reply to external"),
@@ -217,7 +217,7 @@ func TestMapReviewComment(t *testing.T) {
 	})
 
 	t.Run("minimized comment", func(t *testing.T) {
-		rc := mapReviewComment(
+		rc := fromReviewCommentNode(
 			100,
 			githubv4.String("spam"),
 			githubv4.String("Spam"),
@@ -241,7 +241,7 @@ func TestMapReviewComment(t *testing.T) {
 		reactions[0].User.Login = "alice"
 		reactions[1].User.Login = "bob"
 
-		rc := mapReviewComment(
+		rc := fromReviewCommentNode(
 			100,
 			githubv4.String("bob"),
 			githubv4.String("Text"),

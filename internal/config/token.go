@@ -1,18 +1,12 @@
 package config
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
-)
-
-// ErrNotAuthenticated is returned when no token is found.
-var ErrNotAuthenticated = errors.New(
-	"not authenticated — run 'gh contribute auth login' first",
 )
 
 const (
@@ -32,22 +26,30 @@ const (
 // LoadToken returns the GitHub access token.
 // Priority: GH_CONTRIBUTE_TOKEN env var → GitHub App credentials → ~/.config/gh-contribute/token file.
 func LoadToken() (string, error) {
+	_, token, err := loadTokenWithProvider()
+	return token, err
+}
+
+// loadTokenWithProvider returns the token and, when using GitHub App auth, the TokenProvider
+// that handles automatic token refresh. Provider is nil for env var and file-based tokens.
+func loadTokenWithProvider() (*auth.TokenProvider, string, error) {
 	// 1. check env var first — CI / non-interactive environments
 	if t := os.Getenv(TokenEnv); t != "" {
-		return t, nil
+		return nil, t, nil
 	}
 
-	// 2. try GitHub App auth (APP_ID + PRIVATE_KEY → installation token)
-	token, err := tryAppAuth()
+	// 2. try GitHub App auth (APP_ID + PRIVATE_KEY → installation token via TokenProvider)
+	provider, token, err := tryAppAuth()
 	if err != nil {
-		return "", fmt.Errorf("tryAppAuth: %w", err)
+		return nil, "", fmt.Errorf("tryAppAuth: %w", err)
 	}
 	if token != "" {
-		return token, nil
+		return provider, token, nil
 	}
 
 	// 3. fall back to config file (Device Flow token)
-	return loadTokenFromFile()
+	token, err = loadTokenFromFile()
+	return nil, token, err
 }
 
 // loadTokenFromFile reads the token from ~/.config/gh-contribute/token
@@ -74,22 +76,25 @@ func loadTokenFromFile() (string, error) {
 }
 
 // tryAppAuth attempts GitHub App authentication if credentials are configured.
-// Returns ("", nil) if app auth is not configured (no APP_ID env var).
-func tryAppAuth() (string, error) {
+// Returns (nil, "", nil) if app auth is not configured (no APP_ID env var).
+// On success, returns a TokenProvider that caches and refreshes the token automatically,
+// plus the initial token string for immediate use.
+func tryAppAuth() (*auth.TokenProvider, string, error) {
 	appCfg, err := auth.LoadAppConfig()
 	if err != nil {
-		return "", fmt.Errorf("auth.LoadAppConfig: %w", err)
+		return nil, "", fmt.Errorf("auth.LoadAppConfig: %w", err)
 	}
 	if appCfg == nil {
-		return "", nil // not configured — skip
+		return nil, "", nil // not configured — skip
 	}
 
-	token, _, err := auth.GetAppToken(appCfg)
+	provider := auth.NewTokenProvider(appCfg)
+	token, err := provider.Token()
 	if err != nil {
-		return "", fmt.Errorf("auth.GetAppToken [appID=%d]: %w", appCfg.AppID, err)
+		return nil, "", fmt.Errorf("provider.Token [appID=%d]: %w", appCfg.AppID, err)
 	}
 
-	return token, nil
+	return provider, token, nil
 }
 
 // SaveToken persists the token to ~/.config/gh-contribute/token with 0600 permissions.

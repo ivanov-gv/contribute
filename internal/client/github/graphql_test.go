@@ -11,9 +11,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// makeTransport creates a rateLimitTransport with a custom inner transport for testing.
+// makeTransport creates a rateLimitTransport with a static token for testing.
 func makeTransport(token string, inner http.RoundTripper) *rateLimitTransport {
-	return &rateLimitTransport{token: token, inner: inner}
+	return &rateLimitTransport{getToken: func() (string, error) { return token, nil }, inner: inner}
 }
 
 func TestRateLimitTransport_AuthHeader(t *testing.T) {
@@ -86,12 +86,38 @@ func TestRateLimitTransport_RetryOn429_EventuallySucceeds(t *testing.T) {
 	assert.Equal(t, int32(3), callCount.Load()) //nolint:mnd // expects 3 calls: 2 failures + 1 success
 }
 
-func TestRateLimitTransport_RetryOn403(t *testing.T) {
+// TestRateLimitTransport_403_NoRateLimitSignal verifies that a plain 403 (no rate-limit
+// headers) is returned immediately without retry — it is a permission error, not a rate limit.
+func TestRateLimitTransport_403_NoRateLimitSignal(t *testing.T) {
+	var callCount atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		callCount.Add(1)
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	defer srv.Close()
+
+	transport := makeTransport("token", http.DefaultTransport)
+	client := &http.Client{Transport: transport}
+
+	resp, err := client.Get(srv.URL) //nolint:noctx // test helper, no request context needed
+	require.NoError(t, err)
+	resp.Body.Close() //nolint:errcheck,gosec // test cleanup
+
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	assert.Equal(t, int32(1), callCount.Load()) // no retries on plain 403
+}
+
+// TestRateLimitTransport_403_WithRateLimitHeader verifies that a 403 with
+// X-RateLimit-Remaining:0 is retried (rate-limit signal from GitHub).
+func TestRateLimitTransport_403_WithRateLimitHeader(t *testing.T) {
 	var callCount atomic.Int32
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := callCount.Add(1)
 		if n == 1 {
+			w.Header().Set("X-RateLimit-Remaining", "0")
 			w.WriteHeader(http.StatusForbidden)
 			_, _ = w.Write([]byte(`{}`))
 			return
@@ -113,7 +139,7 @@ func TestRateLimitTransport_RetryOn403(t *testing.T) {
 	resp.Body.Close() //nolint:errcheck,gosec // test cleanup
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
-	assert.Equal(t, int32(2), callCount.Load()) //nolint:mnd // 1 failure + 1 success
+	assert.Equal(t, int32(2), callCount.Load()) //nolint:mnd // 1 rate-limited 403 + 1 success
 }
 
 func TestRateLimitTransport_MaxRetries_ReturnsLastResponse(t *testing.T) {

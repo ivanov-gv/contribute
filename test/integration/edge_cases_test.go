@@ -1,5 +1,7 @@
+//go:build !integration
+
 // Package integration — EdgeCaseSuite tests error paths and write operations
-// using a local mock HTTP server. No build tag: runs in CI without GH_CONTRIBUTE_TOKEN.
+// using a local mock HTTP server. Runs in CI without GH_CONTRIBUTE_TOKEN.
 //
 // Run: go test -count=1 -race ./test/integration/...
 package integration

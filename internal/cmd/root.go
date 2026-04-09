@@ -7,6 +7,7 @@ import (
 	ghrest "github.com/google/go-github/v69/github"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/shurcooL/githubv4"
 	"github.com/spf13/cobra"
 
 	ghclient "github.com/ivanov-gv/gh-contribute/internal/client/github"
@@ -38,7 +39,12 @@ func (a *app) init() error {
 		return fmt.Errorf("config.Load: %w", err)
 	}
 
-	gql := ghclient.NewGraphQLClient(cfg.Token)
+	var gql *githubv4.Client
+	if cfg.Provider != nil {
+		gql = ghclient.NewGraphQLClientWithProvider(cfg.Provider)
+	} else {
+		gql = ghclient.NewGraphQLClient(cfg.Token)
+	}
 	rest := ghrest.NewClient(nil).WithAuthToken(cfg.Token)
 
 	log.Debug().Str("owner", cfg.Owner).Str("repo", cfg.Repo).Msg("config loaded")
