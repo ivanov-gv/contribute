@@ -448,3 +448,72 @@ Use the `ENVIRONMENT` variable to distinguish between environments:
 - `PREPROD` — Pre-production/staging. Enables extra warnings or debug features via post-handlers in the server layer
   (e.g. appending a test environment warning to every response). The app and service layers stay unaware of the
   environment — environment-specific behavior is injected at the server layer only.
+
+---
+
+# gh-contribute
+
+A GitHub CLI extension (`gh extension`) that lets AI agents interact with PRs as real contributors.
+
+## Build & test
+
+```bash
+make build                  # compile to bin/gh-contribute
+make install                # install to $GOPATH/bin
+make test                   # unit tests (race detector)
+make test-integration-local # integration tests with mock server (no token needed)
+make test-integration       # integration tests against real GitHub (requires GH_CONTRIBUTE_TOKEN)
+make test-e2e               # full E2E against real GitHub
+make lint                   # golangci-lint
+make fmt                    # gofmt
+```
+
+## Authentication
+
+Token priority (highest to lowest): `GH_CONTRIBUTE_TOKEN` env var → GitHub App env vars → stored `app.json` → `~/.config/gh-contribute/token` file.
+
+**User (Device Flow):**
+```bash
+gh contribute auth login          # opens browser, stores token in ~/.config/gh-contribute/token
+gh contribute auth status         # show current identity
+```
+
+**GitHub App (installation token, auto-refreshed):**
+```bash
+# via env vars (CI / non-interactive)
+export GH_CONTRIBUTE_APP_ID=<id>
+export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
+# optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
+
+# via CLI (persists to ~/.config/gh-contribute/app.json)
+gh contribute auth login-app --app-id <id> --key-path /path/to/private-key.pem
+# --app-id can be omitted if GH_CONTRIBUTE_APP_ID is set
+```
+
+App credentials stored in `app.json` take precedence over the token file but lose to env vars.
+
+## Key architecture notes
+
+- `internal/client/auth/` — JWT generation, installation token exchange, Device Flow polling, `TokenProvider` (thread-safe auto-refresh).
+- `internal/config/` — token loading priority chain; `app.go` persists app credentials to `~/.config/gh-contribute/app.json`.
+- All commands auto-detect owner/repo from `git remote get-url origin` and PR number from the current branch name.
+- GraphQL (shurcooL/githubv4) for reads; REST (google/go-github) for writes.
+- Output defaults to markdown; pass `--format json` for machine-readable output.
+
+## Review-cycle workflow
+
+```bash
+gh contribute issue <n>                            # read issue
+gh contribute pr [n]                               # show PR details
+gh contribute comments --pr <n>                    # list all comments + reviews
+gh contribute review <review-id> --pr <n>          # show inline comments for a review
+gh contribute thread <thread-id> --pr <n>          # show full thread
+gh contribute comment <body> --pr <n>              # post top-level comment
+gh contribute reply <comment-id> <body> --pr <n>   # reply to a review comment
+gh contribute react <comment-id> EYES              # acknowledge
+gh contribute react <comment-id> ROCKET            # signal done
+gh contribute resolve <thread-id> --pr <n>         # resolve thread
+gh contribute review-comment <body> --file <f> --line <l> --pr <n>  # inline comment
+gh contribute submit-review --event APPROVE --pr <n>
+gh contribute watch --pr <n>                       # poll for new activity
+```

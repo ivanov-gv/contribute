@@ -69,6 +69,26 @@ func LoadAppConfig() (*AppConfig, error) {
 	}, nil
 }
 
+// LoadAppConfigFromPath creates AppConfig directly from an App ID and a PEM file path.
+// installationID may be 0 for auto-detection.
+func LoadAppConfigFromPath(appID int64, keyPath string, installationID int64) (*AppConfig, error) {
+	pemBytes, err := os.ReadFile(keyPath) //nolint:gosec // path is caller-supplied and validated by the CLI before saving
+	if err != nil {
+		return nil, fmt.Errorf("os.ReadFile [path='%s']: %w", keyPath, err)
+	}
+
+	key, err := parsePrivateKey(pemBytes)
+	if err != nil {
+		return nil, fmt.Errorf("parsePrivateKey: %w", err)
+	}
+
+	return &AppConfig{
+		AppID:          appID,
+		PrivateKey:     key,
+		InstallationID: installationID,
+	}, nil
+}
+
 // loadPrivateKey reads the RSA private key from env var or file
 func loadPrivateKey() (*rsa.PrivateKey, error) {
 	// try base64-encoded PEM from env var
@@ -178,6 +198,45 @@ func GetInstallationToken(jwtToken string, installationID int64) (string, time.T
 // installationNode holds minimal installation data for auto-detection
 type installationNode struct {
 	ID int64 `json:"id"`
+}
+
+// appInfoResponse holds minimal fields from the /app endpoint.
+type appInfoResponse struct {
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
+// GetAppName returns the GitHub App name using a JWT for the given appID and key.
+// Used by the auth status command when authenticated as a GitHub App.
+func GetAppName(ctx context.Context, appID int64, key *rsa.PrivateKey) (string, error) {
+	jwtToken, err := GenerateJWT(appID, key)
+	if err != nil {
+		return "", fmt.Errorf("GenerateJWT: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/app", nil)
+	if err != nil {
+		return "", fmt.Errorf("http.NewRequest: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+jwtToken)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("http.DefaultClient.Do: %w", err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // best-effort close on HTTP response body
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("app info request returned status %d", resp.StatusCode)
+	}
+
+	var info appInfoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return "", fmt.Errorf("json.NewDecoder.Decode: %w", err)
+	}
+
+	return info.Name, nil
 }
 
 // findInstallation returns the first installation ID for the app
