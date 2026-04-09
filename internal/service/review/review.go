@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 
 	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
 )
 
 // graphQLQuerier executes GraphQL queries
@@ -132,11 +133,11 @@ type allReviewsQueryNoDiff struct {
 		PullRequest struct {
 			Reviews struct {
 				Nodes    []reviewMetaNode
-				PageInfo struct{ HasNextPage githubv4.Boolean }
+				PageInfo pagination.PageInfo
 			} `graphql:"reviews(first: 100)"`
 			ReviewThreads struct {
 				Nodes    []reviewThreadNodeNoDiff
-				PageInfo struct{ HasNextPage githubv4.Boolean }
+				PageInfo pagination.PageInfo
 			} `graphql:"reviewThreads(first: 100)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
@@ -151,12 +152,48 @@ type allReviewsQueryWithDiff struct {
 		PullRequest struct {
 			Reviews struct {
 				Nodes    []reviewMetaNode
-				PageInfo struct{ HasNextPage githubv4.Boolean }
+				PageInfo pagination.PageInfo
 			} `graphql:"reviews(first: 100)"`
 			ReviewThreads struct {
 				Nodes    []reviewThreadNodeWithDiff
-				PageInfo struct{ HasNextPage githubv4.Boolean }
+				PageInfo pagination.PageInfo
 			} `graphql:"reviewThreads(first: 100)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// reviewsPageQuery fetches additional pages of review metadata for a PR
+type reviewsPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			Reviews struct {
+				Nodes    []reviewMetaNode
+				PageInfo pagination.PageInfo
+			} `graphql:"reviews(first: 100, after: $cursor)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// reviewThreadsNoDiffPageQuery fetches additional pages of review threads without diffHunk
+type reviewThreadsNoDiffPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			ReviewThreads struct {
+				Nodes    []reviewThreadNodeNoDiff
+				PageInfo pagination.PageInfo
+			} `graphql:"reviewThreads(first: 100, after: $cursor)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// reviewThreadsWithDiffPageQuery fetches additional pages of review threads with diffHunk
+type reviewThreadsWithDiffPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			ReviewThreads struct {
+				Nodes    []reviewThreadNodeWithDiff
+				PageInfo pagination.PageInfo
+			} `graphql:"reviewThreads(first: 100, after: $cursor)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
@@ -165,7 +202,7 @@ type allReviewsQueryWithDiff struct {
 // grouped into thread groups. Each group carries the ThreadID for full-thread lookup.
 // When showDiff is true, diffHunk is included (taken from the first thread comment).
 func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*ReviewDetail, error) {
-	variables := map[string]interface{}{
+	baseVars := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
 		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
@@ -173,39 +210,94 @@ func (s *Service) Get(prNumber int, reviewDatabaseID int64, showDiff bool) (*Rev
 
 	if showDiff {
 		var query allReviewsQueryWithDiff
-		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+		if err := s.gql.Query(context.Background(), &query, baseVars); err != nil {
 			return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
 		}
 		pr := query.Repository.PullRequest
-		if bool(pr.Reviews.PageInfo.HasNextPage) {
-			log.Warn().Int("pr", prNumber).Msg("reviews truncated at 100 — output is incomplete")
+		allReviews := pr.Reviews.Nodes
+		allThreads := pr.ReviewThreads.Nodes
+
+		for pi := pr.Reviews.PageInfo; pi.HasMore(); {
+			vars := map[string]interface{}{
+				"owner":  githubv4.String(s.owner),
+				"repo":   githubv4.String(s.repo),
+				"number": githubv4.Int(prNumber), //nolint:gosec
+				"cursor": pi.Cursor(),
+			}
+			var page reviewsPageQuery
+			if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+				return nil, fmt.Errorf("gql.Query reviews page [pr=%d]: %w", prNumber, err)
+			}
+			allReviews = append(allReviews, page.Repository.PullRequest.Reviews.Nodes...)
+			pi = page.Repository.PullRequest.Reviews.PageInfo
 		}
-		if bool(pr.ReviewThreads.PageInfo.HasNextPage) {
-			log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — output is incomplete")
+
+		for pi := pr.ReviewThreads.PageInfo; pi.HasMore(); {
+			vars := map[string]interface{}{
+				"owner":  githubv4.String(s.owner),
+				"repo":   githubv4.String(s.repo),
+				"number": githubv4.Int(prNumber), //nolint:gosec
+				"cursor": pi.Cursor(),
+			}
+			var page reviewThreadsWithDiffPageQuery
+			if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+				return nil, fmt.Errorf("gql.Query review threads page [pr=%d]: %w", prNumber, err)
+			}
+			allThreads = append(allThreads, page.Repository.PullRequest.ReviewThreads.Nodes...)
+			pi = page.Repository.PullRequest.ReviewThreads.PageInfo
 		}
-		meta := findReviewMeta(pr.Reviews.Nodes, reviewDatabaseID)
+
+		meta := findReviewMeta(allReviews, reviewDatabaseID)
 		if meta == nil {
 			return nil, fmt.Errorf("review #%d not found in PR #%d", reviewDatabaseID, prNumber)
 		}
-		groups := collectGroupsWithDiff(pr.ReviewThreads.Nodes, reviewDatabaseID)
+		groups := collectGroupsWithDiff(allThreads, reviewDatabaseID)
 		return buildReviewDetail(meta, string(query.Viewer.Login), groups), nil
 	}
 
 	var query allReviewsQueryNoDiff
-	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+	if err := s.gql.Query(context.Background(), &query, baseVars); err != nil {
 		return nil, fmt.Errorf("gql.Query [pr=%d, review=%d]: %w", prNumber, reviewDatabaseID, err)
 	}
-	if bool(query.Repository.PullRequest.Reviews.PageInfo.HasNextPage) {
-		log.Warn().Int("pr", prNumber).Msg("reviews truncated at 100 — output is incomplete")
+	pr := query.Repository.PullRequest
+	allReviews := pr.Reviews.Nodes
+	allThreads := pr.ReviewThreads.Nodes
+
+	for pi := pr.Reviews.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page reviewsPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query reviews page [pr=%d]: %w", prNumber, err)
+		}
+		allReviews = append(allReviews, page.Repository.PullRequest.Reviews.Nodes...)
+		pi = page.Repository.PullRequest.Reviews.PageInfo
 	}
-	if bool(query.Repository.PullRequest.ReviewThreads.PageInfo.HasNextPage) {
-		log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — output is incomplete")
+
+	for pi := pr.ReviewThreads.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page reviewThreadsNoDiffPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query review threads page [pr=%d]: %w", prNumber, err)
+		}
+		allThreads = append(allThreads, page.Repository.PullRequest.ReviewThreads.Nodes...)
+		pi = page.Repository.PullRequest.ReviewThreads.PageInfo
 	}
-	meta := findReviewMeta(query.Repository.PullRequest.Reviews.Nodes, reviewDatabaseID)
+
+	meta := findReviewMeta(allReviews, reviewDatabaseID)
 	if meta == nil {
 		return nil, fmt.Errorf("review #%d not found in PR #%d", reviewDatabaseID, prNumber)
 	}
-	groups := collectGroupsNoDiff(query.Repository.PullRequest.ReviewThreads.Nodes, reviewDatabaseID)
+	groups := collectGroupsNoDiff(allThreads, reviewDatabaseID)
 	return buildReviewDetail(meta, string(query.Viewer.Login), groups), nil
 }
 
@@ -220,25 +312,17 @@ func findReviewMeta(nodes []reviewMetaNode, reviewDatabaseID int64) *reviewMetaN
 
 // collectGroupsNoDiff builds thread groups from the no-diff thread nodes.
 func collectGroupsNoDiff(nodes []reviewThreadNodeNoDiff, reviewDatabaseID int64) []ReviewThreadGroup {
-	var groups []ReviewThreadGroup
-	for _, n := range nodes {
-		group, ok := buildGroupNoDiff(n, reviewDatabaseID)
-		if ok {
-			groups = append(groups, group)
-		}
-	}
+	groups := lo.FilterMap(nodes, func(n reviewThreadNodeNoDiff, _ int) (ReviewThreadGroup, bool) {
+		return buildGroupNoDiff(n, reviewDatabaseID)
+	})
 	return sortedGroups(groups)
 }
 
 // collectGroupsWithDiff builds thread groups from the with-diff thread nodes.
 func collectGroupsWithDiff(nodes []reviewThreadNodeWithDiff, reviewDatabaseID int64) []ReviewThreadGroup {
-	var groups []ReviewThreadGroup
-	for _, n := range nodes {
-		group, ok := buildGroupWithDiff(n, reviewDatabaseID)
-		if ok {
-			groups = append(groups, group)
-		}
-	}
+	groups := lo.FilterMap(nodes, func(n reviewThreadNodeWithDiff, _ int) (ReviewThreadGroup, bool) {
+		return buildGroupWithDiff(n, reviewDatabaseID)
+	})
 	return sortedGroups(groups)
 }
 

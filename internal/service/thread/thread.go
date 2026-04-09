@@ -4,11 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 
 	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
 )
 
 // graphQLClient executes GraphQL queries and mutations
@@ -89,7 +90,7 @@ type unresolveThreadMutation struct {
 	} `graphql:"unresolveReviewThread(input: $input)"`
 }
 
-// threadsQuery fetches all review threads for a PR
+// threadsQuery fetches review threads for a PR, one page at a time.
 type threadsQuery struct {
 	Viewer struct {
 		Login githubv4.String
@@ -98,31 +99,51 @@ type threadsQuery struct {
 		PullRequest struct {
 			ReviewThreads struct {
 				Nodes    []reviewThreadNode
-				PageInfo struct{ HasNextPage githubv4.Boolean }
-			} `graphql:"reviewThreads(first: 100)"`
+				PageInfo pagination.PageInfo
+			} `graphql:"reviewThreads(first: 100, after: $cursor)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// Get returns the full thread identified by threadID (the databaseId of the first comment).
-func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
+// fetchAllThreads fetches every review thread for prNumber across all pages.
+// Returns the viewer login (from the first page) and all thread nodes.
+func (s *Service) fetchAllThreads(prNumber int) (string, []reviewThreadNode, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
 		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
+		"cursor": (*githubv4.String)(nil),
 	}
 
-	var query threadsQuery
-	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-		return nil, fmt.Errorf("gql.Query [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	var viewerLogin string
+	var allNodes []reviewThreadNode
+
+	for {
+		var query threadsQuery
+		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+			return "", nil, fmt.Errorf("gql.Query [pr=%d]: %w", prNumber, err)
+		}
+		if viewerLogin == "" {
+			viewerLogin = string(query.Viewer.Login)
+		}
+		allNodes = append(allNodes, query.Repository.PullRequest.ReviewThreads.Nodes...)
+		if !query.Repository.PullRequest.ReviewThreads.PageInfo.HasMore() {
+			break
+		}
+		variables["cursor"] = query.Repository.PullRequest.ReviewThreads.PageInfo.Cursor()
 	}
 
-	if bool(query.Repository.PullRequest.ReviewThreads.PageInfo.HasNextPage) {
-		log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — thread may not be found")
+	return viewerLogin, allNodes, nil
+}
+
+// Get returns the full thread identified by threadID (the databaseId of the first comment).
+func (s *Service) Get(prNumber int, threadID int64) (*Thread, error) {
+	viewerLogin, allNodes, err := s.fetchAllThreads(prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("fetchAllThreads [pr=%d, thread=%d]: %w", prNumber, threadID, err)
 	}
 
-	viewerLogin := string(query.Viewer.Login)
-	for _, n := range query.Repository.PullRequest.ReviewThreads.Nodes {
+	for _, n := range allNodes {
 		if len(n.Comments.Nodes) == 0 || n.Comments.Nodes[0].DatabaseID != threadID {
 			continue
 		}
@@ -171,24 +192,18 @@ func (s *Service) Unresolve(prNumber int, threadID int64) error {
 // findThreadNodeID fetches all threads for a PR and returns the GraphQL node ID
 // of the thread whose first comment has the given database ID.
 func (s *Service) findThreadNodeID(prNumber int, threadID int64) (githubv4.ID, error) {
-	variables := map[string]interface{}{
-		"owner":  githubv4.String(s.owner),
-		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
+	_, allNodes, err := s.fetchAllThreads(prNumber)
+	if err != nil {
+		return nil, fmt.Errorf("fetchAllThreads [pr=%d, thread=%d]: %w", prNumber, threadID, err)
 	}
 
-	var query threadsQuery
-	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-		return nil, fmt.Errorf("gql.Query [pr=%d, thread=%d]: %w", prNumber, threadID, err)
+	node, ok := lo.Find(allNodes, func(n reviewThreadNode) bool {
+		return len(n.Comments.Nodes) > 0 && n.Comments.Nodes[0].DatabaseID == threadID
+	})
+	if !ok {
+		return nil, fmt.Errorf("thread #%d not found in PR #%d", threadID, prNumber)
 	}
-
-	for _, n := range query.Repository.PullRequest.ReviewThreads.Nodes {
-		if len(n.Comments.Nodes) > 0 && n.Comments.Nodes[0].DatabaseID == threadID {
-			return n.ID, nil
-		}
-	}
-
-	return nil, fmt.Errorf("thread #%d not found in PR #%d", threadID, prNumber)
+	return node.ID, nil
 }
 
 func buildThread(n reviewThreadNode, viewerLogin string, threadID int64) *Thread {

@@ -5,7 +5,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
+
+	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
 )
 
 // graphQLQuerier executes GraphQL queries
@@ -150,61 +153,76 @@ type issueListNode struct {
 	}
 }
 
-// issueListQuery fetches open issues with optional label filter
+// issueListQuery fetches open issues with label filter, cursor-paginated
 type issueListQuery struct {
 	Repository struct {
 		Issues struct {
-			Nodes []issueListNode
-		} `graphql:"issues(first: $limit, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}, labels: $labels)"`
+			Nodes    []issueListNode
+			PageInfo pagination.PageInfo
+		} `graphql:"issues(first: 100, after: $cursor, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC}, labels: $labels)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// issueListQueryNoLabel fetches open issues without label filter
+// issueListQueryNoLabel fetches open issues without label filter, cursor-paginated
 type issueListQueryNoLabel struct {
 	Repository struct {
 		Issues struct {
-			Nodes []issueListNode
-		} `graphql:"issues(first: $limit, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC})"`
+			Nodes    []issueListNode
+			PageInfo pagination.PageInfo
+		} `graphql:"issues(first: 100, after: $cursor, states: OPEN, orderBy: {field: CREATED_AT, direction: DESC})"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
-// List returns open issues, optionally filtered by label
+// List returns open issues, optionally filtered by label, up to limit total items.
+// Fetches all pages automatically until limit is reached or no more pages exist.
 func (s *Service) List(limit int, labels []string) ([]ListItem, error) {
 	variables := map[string]interface{}{
-		"owner": githubv4.String(s.owner),
-		"repo":  githubv4.String(s.repo),
-		"limit": githubv4.Int(limit), //nolint:gosec // limits fit in int32
+		"owner":  githubv4.String(s.owner),
+		"repo":   githubv4.String(s.repo),
+		"cursor": (*githubv4.String)(nil),
 	}
 
 	var nodes []issueListNode
 
 	if len(labels) > 0 {
-		// convert labels to []*githubv4.String for the query
-		gqlLabels := make([]*githubv4.String, len(labels))
-		for i, l := range labels {
+		gqlLabels := lo.Map(labels, func(l string, _ int) *githubv4.String {
 			s := githubv4.String(l)
-			gqlLabels[i] = &s
-		}
+			return &s
+		})
 		variables["labels"] = gqlLabels
 
-		var query issueListQuery
-		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-			return nil, fmt.Errorf("gql.Query [labels='%v']: %w", labels, err)
+		for {
+			var query issueListQuery
+			if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+				return nil, fmt.Errorf("gql.Query [labels='%v']: %w", labels, err)
+			}
+			nodes = append(nodes, query.Repository.Issues.Nodes...)
+			if len(nodes) >= limit || !query.Repository.Issues.PageInfo.HasMore() {
+				break
+			}
+			variables["cursor"] = query.Repository.Issues.PageInfo.Cursor()
 		}
-		nodes = query.Repository.Issues.Nodes
 	} else {
-		var query issueListQueryNoLabel
-		if err := s.gql.Query(context.Background(), &query, variables); err != nil {
-			return nil, fmt.Errorf("gql.Query [no labels]: %w", err)
+		for {
+			var query issueListQueryNoLabel
+			if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+				return nil, fmt.Errorf("gql.Query [no labels]: %w", err)
+			}
+			nodes = append(nodes, query.Repository.Issues.Nodes...)
+			if len(nodes) >= limit || !query.Repository.Issues.PageInfo.HasMore() {
+				break
+			}
+			variables["cursor"] = query.Repository.Issues.PageInfo.Cursor()
 		}
-		nodes = query.Repository.Issues.Nodes
 	}
 
-	items := make([]ListItem, len(nodes))
-	for i, n := range nodes {
-		items[i] = fromIssueListNode(&n)
+	if len(nodes) > limit {
+		nodes = nodes[:limit]
 	}
-	return items, nil
+
+	return lo.Map(nodes, func(n issueListNode, _ int) ListItem {
+		return fromIssueListNode(&n)
+	}), nil
 }
 
 func fromIssueNode(n *issueNode) *Info {
@@ -216,29 +234,29 @@ func fromIssueNode(n *issueNode) *Info {
 		URL:          n.URL.String(),
 		Author:       string(n.Author.Login),
 		CommentCount: int(n.Comments.TotalCount),
+		Labels: lo.Map(n.Labels.Nodes, func(l struct{ Name githubv4.String }, _ int) string {
+			return string(l.Name)
+		}),
+		Assignees: lo.Map(n.Assignees.Nodes, func(a struct{ Login githubv4.String }, _ int) string {
+			return "@" + string(a.Login)
+		}),
 	}
 
-	// labels
-	for _, l := range n.Labels.Nodes {
-		info.Labels = append(info.Labels, string(l.Name))
-	}
-
-	// assignees
-	for _, a := range n.Assignees.Nodes {
-		info.Assignees = append(info.Assignees, "@"+string(a.Login))
-	}
-
-	// comments
-	for _, c := range n.Comments.Nodes {
-		info.Comments = append(info.Comments, Comment{
+	info.Comments = lo.Map(n.Comments.Nodes, func(c struct {
+		DatabaseID int64
+		Author     struct{ Login githubv4.String }
+		Body       githubv4.String
+		CreatedAt  githubv4.DateTime
+	}, _ int) Comment {
+		return Comment{
 			DatabaseID: c.DatabaseID,
 			Author:     string(c.Author.Login),
 			Body:       string(c.Body),
 			CreatedAt:  c.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-		})
-	}
+		}
+	})
 
-	// linked PRs from cross-reference events
+	// linked PRs from cross-reference events — deduplicate by PR number
 	seen := make(map[int]bool)
 	for _, item := range n.TimelineItems.Nodes {
 		pr := item.CrossReferencedEvent.Source.PullRequest
@@ -258,15 +276,14 @@ func fromIssueNode(n *issueNode) *Info {
 }
 
 func fromIssueListNode(n *issueListNode) ListItem {
-	item := ListItem{
+	return ListItem{
 		Number:   int(n.Number),
 		Title:    string(n.Title),
 		State:    string(n.State),
 		Author:   string(n.Author.Login),
 		Comments: int(n.Comments.TotalCount),
+		Labels: lo.Map(n.Labels.Nodes, func(l struct{ Name githubv4.String }, _ int) string {
+			return string(l.Name)
+		}),
 	}
-	for _, l := range n.Labels.Nodes {
-		item.Labels = append(item.Labels, string(l.Name))
-	}
-	return item
 }

@@ -37,7 +37,7 @@ const (
 	allReviewsQueryPattern = "reviews(first: 100){nodes{databaseId"
 	threadsQueryPattern    = "nodes{id,isOutdated"
 	issueGetPattern        = "issue(number: $number)"
-	issueListPattern       = "issues(first: $limit"
+	issueListPattern       = "states: OPEN, orderBy"
 )
 
 // EdgeCaseSuite tests error paths and write operations using a mock HTTP server.

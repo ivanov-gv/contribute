@@ -81,11 +81,11 @@ func TestMapPR(t *testing.T) {
 		emptyURL, _ := url.Parse("")
 		node := &prNode{URL: githubv4.URI{URL: emptyURL}}
 		info := fromPRNode(node)
-		assert.Nil(t, info.Reviewers)
-		assert.Nil(t, info.Assignees)
-		assert.Nil(t, info.Labels)
-		assert.Nil(t, info.Projects)
-		assert.Nil(t, info.Issues)
+		assert.Empty(t, info.Reviewers)
+		assert.Empty(t, info.Assignees)
+		assert.Empty(t, info.Labels)
+		assert.Empty(t, info.Projects)
+		assert.Empty(t, info.Issues)
 	})
 
 	t.Run("reviewer types — user and team", func(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 )
 
@@ -203,39 +204,40 @@ func fromPRNode(n *prNode) *Info {
 		Deletions:     int(n.Deletions),
 	}
 
-	// reviewers
-	for _, rr := range n.ReviewRequests.Nodes {
+	info.Reviewers = lo.FilterMap(n.ReviewRequests.Nodes, func(rr struct {
+		RequestedReviewer prReviewerNode
+	}, _ int) (string, bool) {
 		if login := string(rr.RequestedReviewer.User.Login); login != "" {
-			info.Reviewers = append(info.Reviewers, "@"+login)
-		} else if name := string(rr.RequestedReviewer.Team.Name); name != "" {
-			info.Reviewers = append(info.Reviewers, name)
+			return "@" + login, true
 		}
-	}
+		if name := string(rr.RequestedReviewer.Team.Name); name != "" {
+			return name, true
+		}
+		return "", false
+	})
 
-	// assignees
-	for _, a := range n.Assignees.Nodes {
-		info.Assignees = append(info.Assignees, "@"+string(a.Login))
-	}
+	info.Assignees = lo.Map(n.Assignees.Nodes, func(a struct{ Login githubv4.String }, _ int) string {
+		return "@" + string(a.Login)
+	})
 
-	// labels
-	for _, l := range n.Labels.Nodes {
-		info.Labels = append(info.Labels, string(l.Name))
-	}
+	info.Labels = lo.Map(n.Labels.Nodes, func(l struct{ Name githubv4.String }, _ int) string {
+		return string(l.Name)
+	})
 
-	// projects
-	for _, p := range n.ProjectsV2.Nodes {
-		info.Projects = append(info.Projects, string(p.Title))
-	}
+	info.Projects = lo.Map(n.ProjectsV2.Nodes, func(p struct{ Title githubv4.String }, _ int) string {
+		return string(p.Title)
+	})
 
-	// milestone
 	if n.Milestone != nil {
 		info.Milestone = string(n.Milestone.Title)
 	}
 
-	// linked issues
-	for _, i := range n.ClosingIssuesReferences.Nodes {
-		info.Issues = append(info.Issues, LinkedIssue{Number: int(i.Number), Title: string(i.Title)})
-	}
+	info.Issues = lo.Map(n.ClosingIssuesReferences.Nodes, func(i struct {
+		Number githubv4.Int
+		Title  githubv4.String
+	}, _ int) LinkedIssue {
+		return LinkedIssue{Number: int(i.Number), Title: string(i.Title)}
+	})
 
 	return info
 }

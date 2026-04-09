@@ -5,11 +5,12 @@ import (
 	"fmt"
 
 	ghrest "github.com/google/go-github/v69/github"
-	"github.com/rs/zerolog/log"
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 
 	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
 )
 
 // graphQLQuerier executes GraphQL queries
@@ -134,48 +135,124 @@ type commentsQuery struct {
 		PullRequest struct {
 			Comments struct {
 				Nodes    []issueCommentNode
-				PageInfo struct{ HasNextPage githubv4.Boolean }
+				PageInfo pagination.PageInfo
 			} `graphql:"comments(first: 100)"`
 			Reviews struct {
 				Nodes    []reviewNode
-				PageInfo struct{ HasNextPage githubv4.Boolean }
+				PageInfo pagination.PageInfo
 			} `graphql:"reviews(first: 100)"`
 			ReviewThreads struct {
 				Nodes    []reviewThreadSummaryNode
-				PageInfo struct{ HasNextPage githubv4.Boolean }
+				PageInfo pagination.PageInfo
 			} `graphql:"reviewThreads(first: 100)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// issueCommentsPageQuery fetches additional pages of issue comments for a PR
+type issueCommentsPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			Comments struct {
+				Nodes    []issueCommentNode
+				PageInfo pagination.PageInfo
+			} `graphql:"comments(first: 100, after: $cursor)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// reviewsPageQuery fetches additional pages of reviews for a PR
+type reviewsPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			Reviews struct {
+				Nodes    []reviewNode
+				PageInfo pagination.PageInfo
+			} `graphql:"reviews(first: 100, after: $cursor)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// reviewThreadsPageQuery fetches additional pages of review threads for a PR
+type reviewThreadsPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			ReviewThreads struct {
+				Nodes    []reviewThreadSummaryNode
+				PageInfo pagination.PageInfo
+			} `graphql:"reviewThreads(first: 100, after: $cursor)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
 // List fetches all issue comments and reviews for a PR
 func (s *Service) List(prNumber int) (*CommentsResult, error) {
-	var query commentsQuery
-	variables := map[string]interface{}{
+	baseVars := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
 		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
 	}
-	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+
+	var query commentsQuery
+	if err := s.gql.Query(context.Background(), &query, baseVars); err != nil {
 		return nil, fmt.Errorf("gql.Query [pr=%d]: %w", prNumber, err)
 	}
 
 	pr := query.Repository.PullRequest
+	allCommentNodes := pr.Comments.Nodes
+	allReviewNodes := pr.Reviews.Nodes
+	allThreadNodes := pr.ReviewThreads.Nodes
 
-	// warn when results are truncated — caller sees partial data
-	if bool(pr.Comments.PageInfo.HasNextPage) {
-		log.Warn().Int("pr", prNumber).Msg("issue comments truncated at 100 — output is incomplete")
-	}
-	if bool(pr.Reviews.PageInfo.HasNextPage) {
-		log.Warn().Int("pr", prNumber).Msg("reviews truncated at 100 — output is incomplete")
-	}
-	if bool(pr.ReviewThreads.PageInfo.HasNextPage) {
-		log.Warn().Int("pr", prNumber).Msg("review threads truncated at 100 — output is incomplete")
+	// paginate issue comments
+	for pi := pr.Comments.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page issueCommentsPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query comments page [pr=%d]: %w", prNumber, err)
+		}
+		allCommentNodes = append(allCommentNodes, page.Repository.PullRequest.Comments.Nodes...)
+		pi = page.Repository.PullRequest.Comments.PageInfo
 	}
 
-	var issueComments []IssueComment
-	for _, n := range pr.Comments.Nodes {
-		issueComments = append(issueComments, IssueComment{
+	// paginate reviews
+	for pi := pr.Reviews.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page reviewsPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query reviews page [pr=%d]: %w", prNumber, err)
+		}
+		allReviewNodes = append(allReviewNodes, page.Repository.PullRequest.Reviews.Nodes...)
+		pi = page.Repository.PullRequest.Reviews.PageInfo
+	}
+
+	// paginate review threads
+	for pi := pr.ReviewThreads.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page reviewThreadsPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query review threads page [pr=%d]: %w", prNumber, err)
+		}
+		allThreadNodes = append(allThreadNodes, page.Repository.PullRequest.ReviewThreads.Nodes...)
+		pi = page.Repository.PullRequest.ReviewThreads.PageInfo
+	}
+
+	issueComments := lo.Map(allCommentNodes, func(n issueCommentNode, _ int) IssueComment {
+		return IssueComment{
 			DatabaseID:      n.DatabaseID,
 			Author:          string(n.Author.Login),
 			Body:            string(n.Body),
@@ -183,14 +260,14 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 			IsMinimized:     bool(n.IsMinimized),
 			MinimizedReason: string(n.MinimizedReason),
 			Reactions:       graphql_model.MapReactions(n.Reactions.Nodes),
-		})
-	}
+		}
+	})
 
 	// build map of review ID → whether all associated threads are resolved
-	allThreadsResolved := computeAllThreadsResolved(pr.ReviewThreads.Nodes)
+	allThreadsResolved := computeAllThreadsResolved(allThreadNodes)
 
 	var reviews []Review
-	for _, n := range pr.Reviews.Nodes {
+	for _, n := range allReviewNodes {
 		r := Review{
 			DatabaseID:      n.DatabaseID,
 			Author:          string(n.Author.Login),
