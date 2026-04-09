@@ -1,8 +1,10 @@
+It's mostly a test project to try Claude Code. Completely vibecoded. Use with caution.
+
+---
+
 # gh-contribute
 
 A GitHub CLI extension that lets AI agents interact with pull requests as real contributors — reading reviews, posting comments, and leaving reactions.
-
-It's vibecoded, use with caution.
 
 ## TL;DR
 
