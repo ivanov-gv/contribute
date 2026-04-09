@@ -76,14 +76,25 @@ func loadTokenFromFile() (string, error) {
 }
 
 // tryAppAuth attempts GitHub App authentication if credentials are configured.
-// Returns (nil, "", nil) if app auth is not configured (no APP_ID env var).
+// Priority: env vars (GH_CONTRIBUTE_APP_ID) → stored app.json credentials.
+// Returns (nil, "", nil) if app auth is not configured.
 // On success, returns a TokenProvider that caches and refreshes the token automatically,
 // plus the initial token string for immediate use.
 func tryAppAuth() (*auth.TokenProvider, string, error) {
+	// 1. try env vars
 	appCfg, err := auth.LoadAppConfig()
 	if err != nil {
 		return nil, "", fmt.Errorf("auth.LoadAppConfig: %w", err)
 	}
+
+	// 2. fall back to stored app credentials file
+	if appCfg == nil {
+		appCfg, err = loadStoredAppConfig()
+		if err != nil {
+			return nil, "", fmt.Errorf("loadStoredAppConfig: %w", err)
+		}
+	}
+
 	if appCfg == nil {
 		return nil, "", nil // not configured — skip
 	}
@@ -95,6 +106,20 @@ func tryAppAuth() (*auth.TokenProvider, string, error) {
 	}
 
 	return provider, token, nil
+}
+
+// loadStoredAppConfig reads app credentials from the config file and converts them to AppConfig.
+// Returns nil, nil when no config file exists.
+func loadStoredAppConfig() (*auth.AppConfig, error) {
+	stored, err := loadAppCredentials()
+	if err != nil {
+		return nil, fmt.Errorf("loadAppCredentials: %w", err)
+	}
+	if stored == nil {
+		return nil, nil // not configured
+	}
+
+	return auth.LoadAppConfigFromPath(stored.AppID, stored.PrivateKeyPath, stored.InstallationID)
 }
 
 // SaveToken persists the token to ~/.config/gh-contribute/token with 0600 permissions.
