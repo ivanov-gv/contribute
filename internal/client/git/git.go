@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -8,7 +9,7 @@ import (
 
 // CurrentBranch returns the name of the currently checked-out branch
 func CurrentBranch() (string, error) {
-	out, err := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD").Output()
+	out, err := exec.CommandContext(context.Background(), "git", "rev-parse", "--abbrev-ref", "HEAD").Output()
 	if err != nil {
 		return "", fmt.Errorf("git rev-parse --abbrev-ref HEAD: %w", err)
 	}

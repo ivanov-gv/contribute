@@ -19,9 +19,17 @@ install:
 test:
 	go test -count=1 -race ./internal/...
 
-## test-integration: run integration tests with race detector
+## test-integration-local: run edge-case integration tests with mock server (no token needed)
+test-integration-local:
+	go test -count=1 -race ./test/integration/...
+
+## test-integration: run integration tests against real GitHub API (requires GH_CONTRIBUTE_TOKEN)
 test-integration:
-	go test -count=1 -race ./test/...
+	go test -tags integration -count=1 -race ./test/integration/...
+
+## test-e2e: run E2E tests against real GitHub API (requires GH_CONTRIBUTE_TOKEN)
+test-e2e:
+	go test -tags integration -count=1 -race ./test/...
 
 ## lint: run golangci-lint
 lint:
@@ -41,10 +49,15 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 
+VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+COMMIT   ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+LDFLAGS  := -ldflags="-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)"
+
+## release-build: cross-compile stripped binaries for all platforms
 release-build:
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o build/gh-contribute-windows-amd64.exe ./cmd/gh-contribute/
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/gh-contribute-linux-amd64 ./cmd/gh-contribute/
-    CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o build/gh-contribute-darwin-amd64 ./cmd/gh-contribute/
-    # git tag v0.0.0
-    # git push origin v0.0.0
-    # gh release create v0.0.0 ./build/*amd64*
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/gh-contribute-windows-amd64.exe ./cmd/gh-contribute/
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/gh-contribute-linux-amd64 ./cmd/gh-contribute/
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/gh-contribute-darwin-amd64 ./cmd/gh-contribute/
+	# git tag v0.0.0
+	# git push origin v0.0.0
+	# gh release create v0.0.0 ./build/*amd64*

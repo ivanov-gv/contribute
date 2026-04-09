@@ -93,7 +93,7 @@ func openBrowser(uri string) {
 		log.Debug().Str("os", runtime.GOOS).Msg("openBrowser: unsupported OS, please open URL manually")
 		return
 	}
-	if err := exec.Command(cmd, uri).Start(); err != nil {
+	if err := exec.CommandContext(context.Background(), cmd, uri).Start(); err != nil { //nolint:gosec // cmd is a trusted constant ("xdg-open" or "open")
 		log.Debug().Err(err).Msg("openBrowser: could not open browser, please open URL manually")
 	}
 }

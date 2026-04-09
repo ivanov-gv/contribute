@@ -5,41 +5,52 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 )
 
+// graphQLQuerier executes GraphQL queries
+type graphQLQuerier interface {
+	Query(ctx context.Context, q interface{}, variables map[string]interface{}) error
+}
+
 // Service provides PR operations via GraphQL
 type Service struct {
-	gql   *githubv4.Client
+	gql   graphQLQuerier
 	owner string
 	repo  string
 }
 
 // NewService creates a new PR service
-func NewService(gql *githubv4.Client, owner, repo string) *Service {
+func NewService(gql graphQLQuerier, owner, repo string) *Service {
 	return &Service{gql: gql, owner: owner, repo: repo}
 }
 
 // Info holds rich PR details from GraphQL
 type Info struct {
-	Number       int
-	Title        string
-	State        string
-	IsDraft      bool
-	Mergeable    string
-	Body         string
-	URL          string
-	Head         string
-	Base         string
-	Author       string
-	CommitCount  int
-	CommentCount int
-	Reviewers    []string
-	Assignees    []string
-	Labels       []string
-	Projects     []string
-	Milestone    string
-	Issues       []LinkedIssue
+	Number        int
+	Title         string
+	State         string
+	IsDraft       bool
+	Mergeable     string
+	Body          string
+	URL           string
+	Head          string
+	Base          string
+	Author        string
+	CommitCount   int
+	CommentCount  int
+	IsLocked      bool
+	ChangedFiles  int
+	Additions     int
+	Deletions     int
+	Reviewers     []string
+	Assignees     []string
+	Labels        []string
+	Projects      []string
+	Milestone     string
+	Issues        []LinkedIssue
+	HeadCommitSHA string
 }
 
 // LinkedIssue is an issue referenced by the PR
@@ -65,16 +76,22 @@ type prReviewerNode struct {
 
 // prNode is the pull request shape returned by the query
 type prNode struct {
-	Number      githubv4.Int
-	Title       githubv4.String
-	State       githubv4.String
-	IsDraft     githubv4.Boolean
-	Mergeable   githubv4.String
-	Body        githubv4.String
-	URL         githubv4.URI
-	HeadRefName githubv4.String
-	BaseRefName githubv4.String
-	Author      struct {
+	Number             githubv4.Int
+	Title              githubv4.String
+	State              githubv4.String
+	IsDraft            githubv4.Boolean
+	Mergeable          githubv4.String
+	Body               githubv4.String
+	URL                githubv4.URI
+	HeadRefName        githubv4.String
+	HeadRefOid         githubv4.String
+	BaseRefName        githubv4.String
+	Locked             githubv4.Boolean
+	ChangedFiles       githubv4.Int
+	Additions          githubv4.Int
+	Deletions          githubv4.Int
+	TotalCommentsCount githubv4.Int
+	Author             struct {
 		Login githubv4.String
 	}
 	Commits struct {
@@ -128,12 +145,12 @@ func (s *Service) Get(number int) (*Info, error) {
 	variables := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(number),
+		"number": githubv4.Int(number), //nolint:gosec // PR numbers fit in int32
 	}
 	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
 		return nil, fmt.Errorf("gql.Query [number=%d]: %w", number, err)
 	}
-	return mapPR(&query.Repository.PullRequest), nil
+	return fromPRNode(&query.Repository.PullRequest), nil
 }
 
 // findByBranchQuery defines the GraphQL query shape for finding a PR by branch
@@ -165,56 +182,62 @@ func (s *Service) FindByBranch(branch string) (int, error) {
 	return int(nodes[0].Number), nil
 }
 
-// mapPR converts the GraphQL response to our Info type
-func mapPR(n *prNode) *Info {
+// fromPRNode converts the GraphQL response to our Info type
+func fromPRNode(n *prNode) *Info {
 	info := &Info{
-		Number:       int(n.Number),
-		Title:        string(n.Title),
-		State:        strings.ToLower(string(n.State)),
-		IsDraft:      bool(n.IsDraft),
-		Mergeable:    string(n.Mergeable),
-		Body:         string(n.Body),
-		URL:          n.URL.String(),
-		Head:         string(n.HeadRefName),
-		Base:         string(n.BaseRefName),
-		Author:       string(n.Author.Login),
-		CommitCount:  int(n.Commits.TotalCount),
-		CommentCount: int(n.Comments.TotalCount) + int(n.Reviews.TotalCount),
+		Number:        int(n.Number),
+		Title:         string(n.Title),
+		State:         strings.ToLower(string(n.State)),
+		IsDraft:       bool(n.IsDraft),
+		Mergeable:     string(n.Mergeable),
+		Body:          string(n.Body),
+		URL:           n.URL.String(),
+		Head:          string(n.HeadRefName),
+		Base:          string(n.BaseRefName),
+		Author:        string(n.Author.Login),
+		CommitCount:   int(n.Commits.TotalCount),
+		CommentCount:  int(n.TotalCommentsCount),
+		IsLocked:      bool(n.Locked),
+		HeadCommitSHA: string(n.HeadRefOid),
+		ChangedFiles:  int(n.ChangedFiles),
+		Additions:     int(n.Additions),
+		Deletions:     int(n.Deletions),
 	}
 
-	// reviewers
-	for _, rr := range n.ReviewRequests.Nodes {
+	info.Reviewers = lo.FilterMap(n.ReviewRequests.Nodes, func(rr struct {
+		RequestedReviewer prReviewerNode
+	}, _ int) (string, bool) {
 		if login := string(rr.RequestedReviewer.User.Login); login != "" {
-			info.Reviewers = append(info.Reviewers, "@"+login)
-		} else if name := string(rr.RequestedReviewer.Team.Name); name != "" {
-			info.Reviewers = append(info.Reviewers, name)
+			return "@" + login, true
 		}
-	}
+		if name := string(rr.RequestedReviewer.Team.Name); name != "" {
+			return name, true
+		}
+		return "", false
+	})
 
-	// assignees
-	for _, a := range n.Assignees.Nodes {
-		info.Assignees = append(info.Assignees, "@"+string(a.Login))
-	}
+	info.Assignees = lo.Map(n.Assignees.Nodes, func(a struct{ Login githubv4.String }, _ int) string {
+		return "@" + string(a.Login)
+	})
 
-	// labels
-	for _, l := range n.Labels.Nodes {
-		info.Labels = append(info.Labels, string(l.Name))
-	}
+	info.Labels = lo.Map(n.Labels.Nodes, func(l struct{ Name githubv4.String }, _ int) string {
+		return string(l.Name)
+	})
 
-	// projects
-	for _, p := range n.ProjectsV2.Nodes {
-		info.Projects = append(info.Projects, string(p.Title))
-	}
+	info.Projects = lo.Map(n.ProjectsV2.Nodes, func(p struct{ Title githubv4.String }, _ int) string {
+		return string(p.Title)
+	})
 
-	// milestone
 	if n.Milestone != nil {
 		info.Milestone = string(n.Milestone.Title)
 	}
 
-	// linked issues
-	for _, i := range n.ClosingIssuesReferences.Nodes {
-		info.Issues = append(info.Issues, LinkedIssue{Number: int(i.Number), Title: string(i.Title)})
-	}
+	info.Issues = lo.Map(n.ClosingIssuesReferences.Nodes, func(i struct {
+		Number githubv4.Int
+		Title  githubv4.String
+	}, _ int) LinkedIssue {
+		return LinkedIssue{Number: int(i.Number), Title: string(i.Title)}
+	})
 
 	return info
 }

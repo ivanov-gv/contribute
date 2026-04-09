@@ -4,7 +4,7 @@ _2026-03-11 12:17:34_
 >3. A hidden review, marked as resolved, with eyes emoji
 
 (1 👀)  
-reactions by you: (1 👀)
+reactions by you: (1 👀)  
 
 ---
 thread #2918002761  test.txt on original line 1 (outdated)  

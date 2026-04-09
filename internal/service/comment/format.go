@@ -15,8 +15,9 @@ type timelineEntry struct {
 	review       *Review
 }
 
-// Format renders the full comments result as human-readable markdown
-func (r *CommentsResult) Format() string {
+// Format renders the full comments result as human-readable markdown.
+// When showHidden is true, hidden/minimized items show full content instead of header-only.
+func (r *CommentsResult) Format(showHidden bool) string {
 	// merge issue comments and reviews into a single timeline
 	var entries []timelineEntry
 	for i := range r.IssueComments {
@@ -36,22 +37,26 @@ func (r *CommentsResult) Format() string {
 		return entries[i].createdAt < entries[j].createdAt
 	})
 
+	if len(entries) == 0 {
+		return ""
+	}
+
 	var b strings.Builder
 	for i, e := range entries {
 		if i > 0 {
 			b.WriteString("\n---\n")
 		}
 		if e.issueComment != nil {
-			b.WriteString(formatIssueComment(e.issueComment, r.ViewerLogin))
+			b.WriteString(formatIssueComment(e.issueComment, r.ViewerLogin, showHidden))
 		} else {
-			b.WriteString(formatReview(e.review, r.ViewerLogin))
+			b.WriteString(formatReview(e.review, r.ViewerLogin, showHidden))
 		}
 	}
 
-	return b.String()
+	return b.String() + "\n"
 }
 
-func formatIssueComment(c *IssueComment, viewerLogin string) string {
+func formatIssueComment(c *IssueComment, viewerLogin string, showHidden bool) string {
 	var b strings.Builder
 
 	authorDisplay := format.Author(c.Author, viewerLogin)
@@ -60,49 +65,69 @@ func formatIssueComment(c *IssueComment, viewerLogin string) string {
 		if reason == "" {
 			reason = "hidden"
 		}
-		b.WriteString(fmt.Sprintf("issue #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason))
-		return b.String()
+		if !showHidden {
+			// compact header-only for hidden comments
+			fmt.Fprintf(&b, "issue #%d by %s | hidden: %s\n", c.DatabaseID, authorDisplay, reason)
+			return b.String()
+		}
+		// full content with hidden marker in header
+		fmt.Fprintf(&b, "issue #%d by %s | hidden: %s  \n", c.DatabaseID, authorDisplay, reason)
+	} else {
+		fmt.Fprintf(&b, "issue #%d by %s  \n", c.DatabaseID, authorDisplay)
 	}
-
-	b.WriteString(fmt.Sprintf("issue #%d by %s  \n", c.DatabaseID, authorDisplay))
-	b.WriteString(fmt.Sprintf("_%s_  \n", format.Date(c.CreatedAt)))
+	fmt.Fprintf(&b, "_%s_  \n", format.Date(c.CreatedAt))
 	b.WriteString("\n")
-	b.WriteString(c.Body + "\n")
-	b.WriteString("\n")
-	b.WriteString(format.Reactions(c.Reactions, viewerLogin))
+	body := strings.TrimRight(strings.ReplaceAll(c.Body, "\r\n", "\n"), "\n")
+	for _, line := range strings.Split(body, "\n") {
+		b.WriteString(">" + line + "\n")
+	}
+	if reactionsStr := format.Reactions(c.Reactions, viewerLogin); reactionsStr != "" {
+		b.WriteString("\n")
+		b.WriteString(reactionsStr)
+	}
 
 	return b.String()
 }
 
-func formatReview(r *Review, viewerLogin string) string {
+func formatReview(r *Review, viewerLogin string, showHidden bool) string {
 	var b strings.Builder
 
 	authorDisplay := format.Author(r.Author, viewerLogin)
 
-	if r.IsMinimized {
-		reason := format.EnumLabel(r.MinimizedReason)
+	if r.IsHidden {
+		reason := r.HiddenReason
 		if reason == "" {
 			reason = "hidden"
 		}
-		b.WriteString(fmt.Sprintf("review #%d by %s | hidden: %s\n", r.DatabaseID, authorDisplay, reason))
-		return b.String()
+		if !showHidden {
+			// compact header-only for hidden reviews
+			fmt.Fprintf(&b, "review #%d by %s | hidden: %s\n", r.DatabaseID, authorDisplay, reason)
+			return b.String()
+		}
+		// full content with hidden marker in header
+		fmt.Fprintf(&b, "review #%d by %s | hidden: %s  \n", r.DatabaseID, authorDisplay, reason)
+	} else if r.State == "DISMISSED" {
+		if !showHidden {
+			fmt.Fprintf(&b, "review #%d by %s | hidden: Dismissed\n", r.DatabaseID, authorDisplay)
+			return b.String()
+		}
+		fmt.Fprintf(&b, "review #%d by %s | hidden: Dismissed  \n", r.DatabaseID, authorDisplay)
+	} else {
+		fmt.Fprintf(&b, "review #%d by %s  \n", r.DatabaseID, authorDisplay)
 	}
-	if r.State == "DISMISSED" {
-		b.WriteString(fmt.Sprintf("review #%d by %s | hidden: Dismissed\n", r.DatabaseID, authorDisplay))
-		return b.String()
-	}
-
-	b.WriteString(fmt.Sprintf("review #%d by %s  \n", r.DatabaseID, authorDisplay))
-	b.WriteString(fmt.Sprintf("_%s_  \n", format.Date(r.CreatedAt)))
+	fmt.Fprintf(&b, "_%s_  \n", format.Date(r.CreatedAt))
 	b.WriteString("\n")
 
 	if r.Body != "" {
-		b.WriteString(r.Body + "\n")
+		reviewBody := strings.TrimRight(strings.ReplaceAll(r.Body, "\r\n", "\n"), "\n")
+		for _, line := range strings.Split(reviewBody, "\n") {
+			b.WriteString(">" + line + "\n")
+		}
 		b.WriteString("\n")
 	}
 
 	if r.CommentCount > 0 {
-		b.WriteString(fmt.Sprintf("comments: %d  \n", r.CommentCount))
+		fmt.Fprintf(&b, "comments: %d  \n", r.CommentCount)
 	}
 
 	b.WriteString(format.Reactions(r.Reactions, viewerLogin))

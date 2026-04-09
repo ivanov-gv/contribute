@@ -5,22 +5,43 @@ import (
 	"fmt"
 
 	ghrest "github.com/google/go-github/v69/github"
+	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 
+	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
 	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
+	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
 )
+
+// graphQLQuerier executes GraphQL queries
+type graphQLQuerier interface {
+	Query(ctx context.Context, q interface{}, variables map[string]interface{}) error
+}
+
+// issueCommenter creates top-level comments on issues/PRs
+type issueCommenter interface {
+	CreateComment(ctx context.Context, owner, repo string, number int, comment *ghrest.IssueComment) (*ghrest.IssueComment, *ghrest.Response, error)
+}
+
+// pullRequestCommenter creates and replies to PR review comments and submits reviews
+type pullRequestCommenter interface {
+	CreateComment(ctx context.Context, owner, repo string, number int, comment *ghrest.PullRequestComment) (*ghrest.PullRequestComment, *ghrest.Response, error)
+	CreateCommentInReplyTo(ctx context.Context, owner, repo string, number int, body string, commentID int64) (*ghrest.PullRequestComment, *ghrest.Response, error)
+	CreateReview(ctx context.Context, owner, repo string, number int, review *ghrest.PullRequestReviewRequest) (*ghrest.PullRequestReview, *ghrest.Response, error)
+}
 
 // Service provides comment operations — GraphQL for reads, REST for writes
 type Service struct {
-	gql        *githubv4.Client
-	restClient *ghrest.Client
-	owner      string
-	repo       string
+	gql          graphQLQuerier
+	issues       issueCommenter
+	pullRequests pullRequestCommenter
+	owner        string
+	repo         string
 }
 
 // NewService creates a new comment service
-func NewService(gql *githubv4.Client, restClient *ghrest.Client, owner, repo string) *Service {
-	return &Service{gql: gql, restClient: restClient, owner: owner, repo: repo}
+func NewService(gql graphQLQuerier, restClient *ghrest.Client, owner, repo string) *Service {
+	return &Service{gql: gql, issues: restClient.Issues, pullRequests: restClient.PullRequests, owner: owner, repo: repo}
 }
 
 // IssueComment holds a top-level PR comment
@@ -45,6 +66,8 @@ type Review struct {
 	Reactions       []format.Reaction
 	IsMinimized     bool
 	MinimizedReason string
+	IsHidden        bool   // true when IsMinimized or all associated threads are resolved
+	HiddenReason    string // e.g. "Resolved"
 }
 
 // CommentsResult holds all comments and reviews for a PR
@@ -52,14 +75,6 @@ type CommentsResult struct {
 	ViewerLogin   string
 	IssueComments []IssueComment
 	Reviews       []Review
-}
-
-// reactionNode is a single reaction with content and author
-type reactionNode struct {
-	Content githubv4.String
-	User    struct {
-		Login githubv4.String
-	}
 }
 
 // issueCommentNode is a single top-level comment node
@@ -73,7 +88,7 @@ type issueCommentNode struct {
 	IsMinimized     githubv4.Boolean
 	MinimizedReason githubv4.String
 	Reactions       struct {
-		Nodes []reactionNode
+		Nodes []graphql_model.ReactionNode
 	} `graphql:"reactions(first: 100)"`
 }
 
@@ -92,8 +107,23 @@ type reviewNode struct {
 		TotalCount githubv4.Int
 	}
 	Reactions struct {
-		Nodes []reactionNode
+		Nodes []graphql_model.ReactionNode
 	} `graphql:"reactions(first: 100)"`
+}
+
+// reviewThreadCommentNode holds minimal comment data for thread-level hidden detection
+type reviewThreadCommentNode struct {
+	PullRequestReview *struct {
+		DatabaseID int64
+	}
+}
+
+// reviewThreadSummaryNode holds thread-level resolution and associated comments
+type reviewThreadSummaryNode struct {
+	IsResolved githubv4.Boolean
+	Comments   struct {
+		Nodes []reviewThreadCommentNode
+	} `graphql:"comments(first: 50)"`
 }
 
 // commentsQuery defines the GraphQL query shape for listing all comments and reviews on a PR
@@ -104,55 +134,163 @@ type commentsQuery struct {
 	Repository struct {
 		PullRequest struct {
 			Comments struct {
-				Nodes []issueCommentNode
+				Nodes    []issueCommentNode
+				PageInfo pagination.PageInfo
 			} `graphql:"comments(first: 100)"`
 			Reviews struct {
-				Nodes []reviewNode
+				Nodes    []reviewNode
+				PageInfo pagination.PageInfo
 			} `graphql:"reviews(first: 100)"`
+			ReviewThreads struct {
+				Nodes    []reviewThreadSummaryNode
+				PageInfo pagination.PageInfo
+			} `graphql:"reviewThreads(first: 100)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// issueCommentsPageQuery fetches additional pages of issue comments for a PR
+type issueCommentsPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			Comments struct {
+				Nodes    []issueCommentNode
+				PageInfo pagination.PageInfo
+			} `graphql:"comments(first: 100, after: $cursor)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// reviewsPageQuery fetches additional pages of reviews for a PR
+type reviewsPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			Reviews struct {
+				Nodes    []reviewNode
+				PageInfo pagination.PageInfo
+			} `graphql:"reviews(first: 100, after: $cursor)"`
+		} `graphql:"pullRequest(number: $number)"`
+	} `graphql:"repository(owner: $owner, name: $repo)"`
+}
+
+// reviewThreadsPageQuery fetches additional pages of review threads for a PR
+type reviewThreadsPageQuery struct {
+	Repository struct {
+		PullRequest struct {
+			ReviewThreads struct {
+				Nodes    []reviewThreadSummaryNode
+				PageInfo pagination.PageInfo
+			} `graphql:"reviewThreads(first: 100, after: $cursor)"`
 		} `graphql:"pullRequest(number: $number)"`
 	} `graphql:"repository(owner: $owner, name: $repo)"`
 }
 
 // List fetches all issue comments and reviews for a PR
 func (s *Service) List(prNumber int) (*CommentsResult, error) {
-	var query commentsQuery
-	variables := map[string]interface{}{
+	baseVars := map[string]interface{}{
 		"owner":  githubv4.String(s.owner),
 		"repo":   githubv4.String(s.repo),
-		"number": githubv4.Int(prNumber),
+		"number": githubv4.Int(prNumber), //nolint:gosec // PR numbers fit in int32
 	}
-	if err := s.gql.Query(context.Background(), &query, variables); err != nil {
+
+	var query commentsQuery
+	if err := s.gql.Query(context.Background(), &query, baseVars); err != nil {
 		return nil, fmt.Errorf("gql.Query [pr=%d]: %w", prNumber, err)
 	}
 
 	pr := query.Repository.PullRequest
+	allCommentNodes := pr.Comments.Nodes
+	allReviewNodes := pr.Reviews.Nodes
+	allThreadNodes := pr.ReviewThreads.Nodes
 
-	var issueComments []IssueComment
-	for _, n := range pr.Comments.Nodes {
-		issueComments = append(issueComments, IssueComment{
+	// paginate issue comments
+	for pi := pr.Comments.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page issueCommentsPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query comments page [pr=%d]: %w", prNumber, err)
+		}
+		allCommentNodes = append(allCommentNodes, page.Repository.PullRequest.Comments.Nodes...)
+		pi = page.Repository.PullRequest.Comments.PageInfo
+	}
+
+	// paginate reviews
+	for pi := pr.Reviews.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page reviewsPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query reviews page [pr=%d]: %w", prNumber, err)
+		}
+		allReviewNodes = append(allReviewNodes, page.Repository.PullRequest.Reviews.Nodes...)
+		pi = page.Repository.PullRequest.Reviews.PageInfo
+	}
+
+	// paginate review threads
+	for pi := pr.ReviewThreads.PageInfo; pi.HasMore(); {
+		vars := map[string]interface{}{
+			"owner":  githubv4.String(s.owner),
+			"repo":   githubv4.String(s.repo),
+			"number": githubv4.Int(prNumber), //nolint:gosec
+			"cursor": pi.Cursor(),
+		}
+		var page reviewThreadsPageQuery
+		if err := s.gql.Query(context.Background(), &page, vars); err != nil {
+			return nil, fmt.Errorf("gql.Query review threads page [pr=%d]: %w", prNumber, err)
+		}
+		allThreadNodes = append(allThreadNodes, page.Repository.PullRequest.ReviewThreads.Nodes...)
+		pi = page.Repository.PullRequest.ReviewThreads.PageInfo
+	}
+
+	issueComments := lo.Map(allCommentNodes, func(n issueCommentNode, _ int) IssueComment {
+		return IssueComment{
 			DatabaseID:      n.DatabaseID,
 			Author:          string(n.Author.Login),
 			Body:            string(n.Body),
 			CreatedAt:       n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			IsMinimized:     bool(n.IsMinimized),
 			MinimizedReason: string(n.MinimizedReason),
-			Reactions:       mapReactions(n.Reactions.Nodes),
-		})
-	}
+			Reactions:       graphql_model.MapReactions(n.Reactions.Nodes),
+		}
+	})
+
+	// build map of review ID → whether all associated threads are resolved
+	allThreadsResolved := computeAllThreadsResolved(allThreadNodes)
 
 	var reviews []Review
-	for _, n := range pr.Reviews.Nodes {
-		reviews = append(reviews, Review{
+	for _, n := range allReviewNodes {
+		r := Review{
 			DatabaseID:      n.DatabaseID,
 			Author:          string(n.Author.Login),
 			Body:            string(n.Body),
 			State:           string(n.State),
 			CreatedAt:       n.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			CommentCount:    int(n.Comments.TotalCount),
-			Reactions:       mapReactions(n.Reactions.Nodes),
+			Reactions:       graphql_model.MapReactions(n.Reactions.Nodes),
 			IsMinimized:     bool(n.IsMinimized),
 			MinimizedReason: string(n.MinimizedReason),
-		})
+		}
+		// hidden detection: minimized by user OR all associated threads resolved
+		if r.IsMinimized {
+			r.IsHidden = true
+			r.HiddenReason = format.EnumLabel(r.MinimizedReason)
+			if r.HiddenReason == "" {
+				r.HiddenReason = "hidden"
+			}
+		} else if resolved, ok := allThreadsResolved[n.DatabaseID]; ok && resolved {
+			r.IsHidden = true
+			r.HiddenReason = "Resolved"
+		}
+		reviews = append(reviews, r)
 	}
 
 	return &CommentsResult{
@@ -164,7 +302,7 @@ func (s *Service) List(prNumber int) (*CommentsResult, error) {
 
 // Post creates a new top-level comment on a PR via REST API
 func (s *Service) Post(prNumber int, body string) (*IssueComment, error) {
-	comment, _, err := s.restClient.Issues.CreateComment(
+	comment, _, err := s.issues.CreateComment(
 		context.Background(), s.owner, s.repo, prNumber,
 		&ghrest.IssueComment{Body: ghrest.Ptr(body)},
 	)
@@ -177,6 +315,61 @@ func (s *Service) Post(prNumber int, body string) (*IssueComment, error) {
 		Body:       comment.GetBody(),
 		CreatedAt:  comment.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
 	}, nil
+}
+
+// PostInlineComment creates a new inline review comment on a specific file and line
+func (s *Service) PostInlineComment(prNumber int, commitSHA, path, body string, line int, side string) (*IssueComment, error) {
+	comment := &ghrest.PullRequestComment{
+		Body:     ghrest.Ptr(body),
+		CommitID: ghrest.Ptr(commitSHA),
+		Path:     ghrest.Ptr(path),
+		Line:     ghrest.Ptr(line),
+	}
+	if side != "" {
+		comment.Side = ghrest.Ptr(side)
+	}
+	created, _, err := s.pullRequests.CreateComment(context.Background(), s.owner, s.repo, prNumber, comment)
+	if err != nil {
+		return nil, fmt.Errorf("PullRequests.CreateComment [pr=%d, path='%s', line=%d]: %w", prNumber, path, line, err)
+	}
+	return &IssueComment{
+		DatabaseID: created.GetID(),
+		Author:     created.GetUser().GetLogin(),
+		Body:       created.GetBody(),
+		CreatedAt:  created.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
+	}, nil
+}
+
+// ReplyToReviewComment posts a reply to an existing review comment in-thread via REST API
+func (s *Service) ReplyToReviewComment(prNumber int, commentID int64, body string) (*IssueComment, error) {
+	comment, _, err := s.pullRequests.CreateCommentInReplyTo(
+		context.Background(), s.owner, s.repo, prNumber, body, commentID,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("PullRequests.CreateCommentInReplyTo [pr=%d, comment=%d]: %w", prNumber, commentID, err)
+	}
+	return &IssueComment{
+		DatabaseID: comment.GetID(),
+		Author:     comment.GetUser().GetLogin(),
+		Body:       comment.GetBody(),
+		CreatedAt:  comment.GetCreatedAt().Format("2006-01-02T15:04:05Z"),
+	}, nil
+}
+
+// SubmitReview creates a new review on a PR with the given event and optional body.
+// Valid events: APPROVE, REQUEST_CHANGES, COMMENT.
+func (s *Service) SubmitReview(prNumber int, event, body string) (int64, error) {
+	review := &ghrest.PullRequestReviewRequest{
+		Event: ghrest.Ptr(event),
+	}
+	if body != "" {
+		review.Body = ghrest.Ptr(body)
+	}
+	created, _, err := s.pullRequests.CreateReview(context.Background(), s.owner, s.repo, prNumber, review)
+	if err != nil {
+		return 0, fmt.Errorf("PullRequests.CreateReview [pr=%d, event='%s']: %w", prNumber, event, err)
+	}
+	return created.GetID(), nil
 }
 
 // FilterByID returns a CommentsResult containing only the comment or review with the given database ID
@@ -200,10 +393,43 @@ func (r *CommentsResult) FilterByID(id int64) *CommentsResult {
 	return nil
 }
 
-func mapReactions(nodes []reactionNode) []format.Reaction {
-	reactions := make([]format.Reaction, len(nodes))
-	for i, n := range nodes {
-		reactions[i] = format.Reaction{Content: string(n.Content), Author: string(n.User.Login)}
+// computeAllThreadsResolved returns a map from review database ID to whether ALL
+// threads where that review has the ROOT comment are resolved.
+// Only considers threads where the first comment belongs to the review.
+// A review with no root threads is not included in the map.
+func computeAllThreadsResolved(threads []reviewThreadSummaryNode) map[int64]bool {
+	type status struct {
+		hasRootThreads bool
+		allResolved    bool
 	}
-	return reactions
+	reviewStatus := make(map[int64]*status)
+
+	for _, t := range threads {
+		if len(t.Comments.Nodes) == 0 {
+			continue
+		}
+		// only the review that owns the root comment (first in thread) counts
+		root := t.Comments.Nodes[0]
+		if root.PullRequestReview == nil {
+			continue
+		}
+		reviewID := root.PullRequestReview.DatabaseID
+		s, ok := reviewStatus[reviewID]
+		if !ok {
+			s = &status{allResolved: true}
+			reviewStatus[reviewID] = s
+		}
+		s.hasRootThreads = true
+		if !bool(t.IsResolved) {
+			s.allResolved = false
+		}
+	}
+
+	result := make(map[int64]bool)
+	for id, s := range reviewStatus {
+		if s.hasRootThreads {
+			result[id] = s.allResolved
+		}
+	}
+	return result
 }
