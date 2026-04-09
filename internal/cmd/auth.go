@@ -69,8 +69,11 @@ func newAuthLoginAppCmd() *cobra.Command {
 The App must be installed on your target repository. If --installation-id is
 omitted, gh-contribute auto-detects the first installation.
 
+--app-id can be omitted if GH_CONTRIBUTE_APP_ID is set in the environment.
+
 Example:
-  gh contribute auth login-app --app-id 123456 --key-path ~/.config/gh-contribute/private-key.pem`,
+  gh contribute auth login-app --app-id 123456 --key-path ~/.config/gh-contribute/private-key.pem
+  GH_CONTRIBUTE_APP_ID=123456 gh contribute auth login-app --key-path ~/.config/gh-contribute/private-key.pem`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			const logfmt = "auth login-app: "
 
@@ -78,8 +81,16 @@ Example:
 			keyPath, _ := cmd.Flags().GetString("key-path")
 			installationID, _ := cmd.Flags().GetInt64("installation-id")
 
+			// fall back to GH_CONTRIBUTE_APP_ID env var if flag not set
 			if appID == 0 {
-				return fmt.Errorf(logfmt + "--app-id is required")
+				if envVal := os.Getenv("GH_CONTRIBUTE_APP_ID"); envVal != "" {
+					if _, err := fmt.Sscanf(envVal, "%d", &appID); err != nil {
+						return fmt.Errorf(logfmt+"invalid GH_CONTRIBUTE_APP_ID '%s': %w", envVal, err)
+					}
+				}
+			}
+			if appID == 0 {
+				return fmt.Errorf(logfmt + "--app-id is required (or set GH_CONTRIBUTE_APP_ID)")
 			}
 			if keyPath == "" {
 				return fmt.Errorf(logfmt + "--key-path is required")
