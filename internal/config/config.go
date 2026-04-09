@@ -13,10 +13,10 @@ import (
 
 // Config holds the runtime configuration.
 type Config struct {
-	Token    string               // initial GitHub token
-	Provider *auth.TokenProvider  // non-nil when using GitHub App auth; handles automatic token refresh
-	Owner    string               // repository owner
-	Repo     string               // repository name
+	Token    string              // initial GitHub token
+	Provider *auth.TokenProvider // non-nil when using GitHub App auth; handles automatic token refresh
+	Owner    string              // repository owner
+	Repo     string              // repository name
 }
 
 // Load reads configuration from the environment and git context.
