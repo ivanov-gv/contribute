@@ -317,17 +317,17 @@ export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
 If neither env vars nor stored credentials are present, gh-contribute exits with a non-zero code and prompts you to authenticate:
 
 ```
-Error: not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute auth login-app'
+Error: not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute login'
 ```
 
-#### Persisting credentials with login-app
+#### Persisting credentials with gh contribute login
 
 To store credentials in `~/.config/gh-contribute/app.json` instead of setting env vars every time:
 
 ```bash
-gh contribute auth login-app --app-id 123456 --key-path /path/to/private-key.pem
+gh contribute login --app-id 123456 --key-path /path/to/private-key.pem
 # GH_CONTRIBUTE_APP_ID is read from env if --app-id is omitted
-GH_CONTRIBUTE_APP_ID=123456 gh contribute auth login-app --key-path /path/to/private-key.pem
+GH_CONTRIBUTE_APP_ID=123456 gh contribute login --key-path /path/to/private-key.pem
 ```
 
 Stored credentials are used when env vars are not set. Env vars always take priority.
@@ -354,7 +354,7 @@ export GH_CONTRIBUTE_TOKEN=github_pat_...
 Installation tokens expire after 1 hour. gh-contribute automatically refreshes them via the `TokenProvider` — no manual intervention needed. If credentials become invalid, gh-contribute exits with:
 
 ```
-Error: token invalid or expired — run 'gh contribute auth login-app' to reauthenticate
+Error: token invalid or expired — run 'gh contribute login' to reauthenticate
 ```
 
 ## Auto-detection
@@ -387,7 +387,7 @@ gh-contribute/
 │   │   └── github/graphql.go           # GraphQL client (queries)
 │   ├── cmd/                            # cobra command definitions
 │   │   ├── root.go                     # root command, dependency wiring, PersistentPreRunE
-│   │   ├── auth.go                     # auth login-app / auth status commands
+│   │   ├── auth.go                     # login (top-level) / auth status commands
 │   │   ├── pr.go                       # pr command + PR auto-detection
 │   │   ├── comments.go                 # comments command
 │   │   ├── comment.go                  # comment command (post)

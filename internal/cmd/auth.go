@@ -13,36 +13,27 @@ import (
 	"github.com/ivanov-gv/gh-contribute/internal/config"
 )
 
-// newAuthCmd returns the "auth" parent command with login-app and status subcommands.
-func newAuthCmd() *cobra.Command {
-	authCmd := &cobra.Command{
-		Use:   "auth",
-		Short: "Manage GitHub App authentication",
-		// skip app initialization — auth commands do not require a stored token
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
-	}
-	authCmd.AddCommand(newAuthLoginAppCmd(), newAuthStatusCmd())
-	return authCmd
-}
-
-// newAuthLoginAppCmd stores GitHub App credentials for non-interactive authentication.
+// newLoginCmd stores GitHub App credentials for non-interactive authentication.
 // The app must be installed on the target repository before tokens can be issued.
-func newAuthLoginAppCmd() *cobra.Command {
+func newLoginCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "login-app",
+		Use:   "login",
 		Short: "Authenticate as a GitHub App using a private key",
 		Long: `Store GitHub App credentials for automatic installation-token authentication.
 
 The App must be installed on your target repository. If --installation-id is
 omitted, gh-contribute auto-detects the first installation.
 
---app-id can be omitted if GH_CONTRIBUTE_APP_ID is set in the environment.
+If GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH are set, credentials
+are loaded from those env vars automatically — no need to run this command.
 
 Example:
-  gh contribute auth login-app --app-id 123456 --key-path ~/.config/gh-contribute/private-key.pem
-  GH_CONTRIBUTE_APP_ID=123456 gh contribute auth login-app --key-path ~/.config/gh-contribute/private-key.pem`,
+  gh contribute login --app-id 123456 --key-path ~/.config/gh-contribute/private-key.pem
+  GH_CONTRIBUTE_APP_ID=123456 gh contribute login --key-path ~/.config/gh-contribute/private-key.pem`,
+		// skip app initialization — login does not require a stored token
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
-			const logfmt = "auth login-app: "
+			const logfmt = "login: "
 
 			appID, _ := cmd.Flags().GetInt64("app-id")
 			keyPath, _ := cmd.Flags().GetString("key-path")
@@ -107,6 +98,18 @@ Example:
 	return cmd
 }
 
+// newAuthCmd returns the "auth" parent command with the status subcommand.
+func newAuthCmd() *cobra.Command {
+	authCmd := &cobra.Command{
+		Use:   "auth",
+		Short: "Manage GitHub App authentication",
+		// skip app initialization — auth commands do not require a stored token
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
+	}
+	authCmd.AddCommand(newAuthStatusCmd())
+	return authCmd
+}
+
 // newAuthStatusCmd prints the app name and ID for the active GitHub App authentication.
 func newAuthStatusCmd() *cobra.Command {
 	return &cobra.Command{
@@ -121,7 +124,7 @@ func newAuthStatusCmd() *cobra.Command {
 				return fmt.Errorf(logfmt+"config.LoadAppConfig: %w", err)
 			}
 			if appCfg == nil {
-				return fmt.Errorf(logfmt + "not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute auth login-app'")
+				return fmt.Errorf(logfmt + "not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute login'")
 			}
 
 			appName, err := auth.GetAppName(context.Background(), appCfg.AppID, appCfg.PrivateKey)

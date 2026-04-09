@@ -87,7 +87,9 @@ func Execute() {
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable debug logging")
 
 	rootCmd.AddCommand(
-		// auth commands override PersistentPreRunE with a no-op — no token required
+		// login overrides PersistentPreRunE with a no-op — no token required
+		newLoginCmd(),
+		// auth subcommand (status) overrides PersistentPreRunE with a no-op
 		newAuthCmd(),
 		// authenticated commands — app is initialized via PersistentPreRunE
 		_app.newPRCmd(),

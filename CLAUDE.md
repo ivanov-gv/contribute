@@ -480,13 +480,13 @@ export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
 # optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
 
 # via CLI — persists to ~/.config/gh-contribute/app.json
-gh contribute auth login-app --app-id <id> --key-path /path/to/private-key.pem
+gh contribute login --app-id <id> --key-path /path/to/private-key.pem
 # --app-id can be omitted if GH_CONTRIBUTE_APP_ID is set
 
 gh contribute auth status         # show current app identity
 ```
 
-If no credentials are configured, all commands exit with a non-zero code and an error pointing to `auth login-app`.
+If no credentials are configured, all commands exit with a non-zero code and an error pointing to `gh contribute login`.
 
 ## Key architecture notes
 
