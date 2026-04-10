@@ -2,34 +2,34 @@ It's mostly a test project to try Claude Code. Completely vibecoded. Use with ca
 
 ---
 
-# gh-contribute
+# contribute
 
-A GitHub CLI extension that lets AI agents interact with pull requests as real contributors — reading reviews, posting comments, and leaving reactions.
+A CLI tool that lets AI agents interact with pull requests as real contributors — reading reviews, posting comments, and leaving reactions.
 
 ## TL;DR
 
 ```bash
 # install
-gh extension install ivanov-gv/gh-contribute
+go install github.com/ivanov-gv/contribute@latest
 
 # see PR details (auto-detects from current branch)
-gh contribute pr
+contribute pr
 
 # list all comments and reviews on a PR
-gh contribute comments
+contribute comments
 
 # post a comment
-gh contribute comment "Fixed the issue, please re-review"
+contribute comment "Fixed the issue, please re-review"
 
 # react to a comment
-gh contribute react 123456789 eyes --type issue
-gh contribute react 987654321 rocket --type review
+contribute react 123456789 eyes --type issue
+contribute react 987654321 rocket --type review
 
 # show inline comments for a specific review
-gh contribute review 3929204495
+contribute review 3929204495
 
 # show all comments in a thread across reviews (use thread id from review output)
-gh contribute thread 2935138407
+contribute thread 2935138407
 ```
 
 All commands auto-detect the repository (from git remote) and PR number (from current branch). Authentication uses a GitHub App — set `GH_CONTRIBUTE_APP_ID` and `GH_CONTRIBUTE_PRIVATE_KEY_PATH` to authenticate automatically on startup.
@@ -45,7 +45,7 @@ AI coding agents (Claude Code, Copilot, Cursor, etc.) can write code, commit, an
 - Reply to feedback
 - Show progress on addressing review comments
 
-**gh-contribute** bridges this gap. It gives agents a simple CLI interface to the GitHub review workflow, turning them from "push and forget" tools into active PR participants.
+**contribute** bridges this gap. It gives agents a simple CLI interface to the GitHub review workflow, turning them from "push and forget" tools into active PR participants.
 
 ## Use Cases
 
@@ -56,14 +56,14 @@ A typical agent workflow today:
 1. Agent finishes work, commits, pushes, opens a PR
 2. **Dead end** — the agent has no idea what happens next
 
-With gh-contribute:
+With contribute:
 
 1. Agent finishes work, commits, pushes, opens a PR
 2. A reviewer leaves comments and suggestions on the PR
 3. Something triggers the agent again (webhook, polling, slash command)
-4. Agent runs `gh contribute comments` to read all review feedback
+4. Agent runs `contribute comments` to read all review feedback
 5. Agent addresses each comment, pushes fixes
-6. Agent runs `gh contribute comment "Addressed all feedback, PTAL"`
+6. Agent runs `contribute comment "Addressed all feedback, PTAL"`
 7. Repeat until merged
 
 The entire interaction happens through GitHub — no need to access the agent's terminal or UI.
@@ -73,7 +73,7 @@ The entire interaction happens through GitHub — no need to access the agent's 
 When an agent is processing review comments, nobody on GitHub knows what's happening. With reactions, the agent can broadcast its progress:
 
 1. Agent receives notification about new review comments
-2. Runs `gh contribute comments` to get the list
+2. Runs `contribute comments` to get the list
 3. For each comment, the agent:
    - Adds 👀 (`eyes`) reaction — "I'm looking at this"
    - Works on the fix
@@ -93,23 +93,23 @@ An agent can periodically check for new comments across PRs and:
 
 ## Commands
 
-### `gh contribute pr`
+### `contribute pr`
 
 Show details about a pull request in human-readable markdown.
 
 ```bash
 # auto-detect PR from current branch
-gh contribute pr
+contribute pr
 
 # specify PR number explicitly
-gh contribute pr 42
+contribute pr 42
 ```
 
 Output:
 ```
-# test-pr: test gh extension #1
+# test-pr: test pr #1
 open, by @ivanov-gv, 1 commit `test-pr` -> `main`, no merge conflict
-https://github.com/ivanov-gv/gh-contribute/pull/1
+https://github.com/ivanov-gv/contribute/pull/1
 
 Reviewers:
 Assignees: @ivanov-gv
@@ -127,16 +127,16 @@ test description
 ---
 ```
 
-### `gh contribute comments`
+### `contribute comments`
 
 List issue comments and reviews on a pull request. Shows reactions with "by you" tracking, hides minimized comments and fully-resolved reviews.
 
 ```bash
 # all comments and reviews
-gh contribute comments
+contribute comments
 
 # specify PR
-gh contribute comments --pr 42
+contribute comments --pr 42
 ```
 
 Output:
@@ -144,7 +144,7 @@ Output:
 issue #4038597073 by you (@ivanov-gv-ai-helper)
 _2026-03-11 11:33:27_
 
-test comment from gh-contribute 🚀
+test comment 🚀
 
 (1 🚀)
 reactions by you: (1 🚀)
@@ -153,7 +153,7 @@ reactions by you: (1 🚀)
 issue #4038819817 by @ivanov-gv
 _2026-03-11 12:15:54_
 
-> test comment from gh-contribute 🚀
+> test comment 🚀
 test reply
 
 (1 😕)
@@ -180,43 +180,43 @@ Key features:
 - **Hidden items**: minimized issue comments and reviews (`isMinimized: true`) show only the header line with the reason
 - Review inline comments are not expanded — use the review id for detailed inspection
 
-### `gh contribute comment`
+### `contribute comment`
 
 Post a top-level comment on a pull request.
 
 ```bash
-gh contribute comment "All review comments have been addressed. Ready for re-review."
+contribute comment "All review comments have been addressed. Ready for re-review."
 
-gh contribute comment --pr 42 "Automated analysis complete. Found 3 potential issues."
+contribute comment --pr 42 "Automated analysis complete. Found 3 potential issues."
 ```
 
-### `gh contribute react`
+### `contribute react`
 
 Add a reaction to a comment. Use the comment id from the `comments` output.
 
 ```bash
 # react to a review comment (default)
-gh contribute react 123456789 rocket
+contribute react 123456789 rocket
 
 # react to a top-level (issue) comment
-gh contribute react 123456789 eyes --type issue
+contribute react 123456789 eyes --type issue
 ```
 
 Valid reactions: `+1`, `-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, `eyes`
 
-### `gh contribute review`
+### `contribute review`
 
 Show a specific review's inline comments. Only comments belonging to the requested review are shown, grouped by thread. If a comment replies to one from a different review, it is flagged as `(not in this review)` — use `thread` to see the full context.
 
 ```bash
 # show inline comments for review by id (use id from comments output)
-gh contribute review 3929204495
+contribute review 3929204495
 
 # include the diff hunk for each thread
-gh contribute review 3929204495 --diff
+contribute review 3929204495 --diff
 
 # specify PR explicitly
-gh contribute review 3929204495 --pr 42
+contribute review 3929204495 --pr 42
 ```
 
 Output:
@@ -238,7 +238,7 @@ thread #2935132635  internal/auth/auth.go on original line 25 (outdated)
 comment #2935132635 by you (@ivanov-gv)
 _2026-03-14 11:13:32_
 
-Use this path instead: .config/gh-contribute/token
+Use this path instead: .config/contribute/token
 ```
 
 Cross-review reply example (reply belongs to this review, but replies to a comment from another):
@@ -250,16 +250,16 @@ _2026-03-14 12:37:24_
 Yes, you fixed this particular issue on this line in this file, ...
 ```
 
-### `gh contribute thread`
+### `contribute thread`
 
 Show all comments in a thread across all reviews. Use the thread id from the `review` output (the `thread #ID` header). Each comment is annotated with its review id.
 
 ```bash
 # show the full thread
-gh contribute thread 2935138407
+contribute thread 2935138407
 
 # specify PR explicitly
-gh contribute thread 2935138407 --pr 42
+contribute thread 2935138407 --pr 42
 ```
 
 Output:
@@ -282,31 +282,27 @@ Typical workflow: `review` for focused reading of one review's feedback; `thread
 
 ## Installation
 
-### From GitHub releases
+### Via go install
 
 ```bash
-gh extension install ivanov-gv/gh-contribute
+go install github.com/ivanov-gv/contribute@latest
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/ivanov-gv/gh-contribute.git
-cd gh-contribute
-go build -o gh-contribute ./cmd/gh-contribute
+git clone https://github.com/ivanov-gv/contribute.git
+cd contribute
+go install ./cmd/contribute
 ```
-
-Then either:
-- Add the binary to your `PATH`, or
-- Symlink it into `~/.local/share/gh/extensions/gh-contribute/`
 
 ### Authentication
 
-gh-contribute authenticates as a **GitHub App**. API calls appear as `yourapp[bot]`, giving them proper attribution. The app must be installed on the target repository.
+contribute authenticates as a **GitHub App**. API calls appear as `yourapp[bot]`, giving them proper attribution. The app must be installed on the target repository.
 
 #### Automatic login via environment variables
 
-Set these variables before running any command — gh-contribute authenticates automatically on startup:
+Set these variables before running any command — contribute authenticates automatically on startup:
 
 ```bash
 export GH_CONTRIBUTE_APP_ID=123456
@@ -314,20 +310,20 @@ export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
 # optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
 ```
 
-If neither env vars nor stored credentials are present, gh-contribute exits with a non-zero code and prompts you to authenticate:
+If neither env vars nor stored credentials are present, contribute exits with a non-zero code and prompts you to authenticate:
 
 ```
-Error: not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute login'
+Error: not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'contribute login'
 ```
 
-#### Persisting credentials with gh contribute login
+#### Persisting credentials with contribute login
 
-To store credentials in `~/.config/gh-contribute/app.json` instead of setting env vars every time:
+To store credentials in `~/.config/contribute/app.json` instead of setting env vars every time:
 
 ```bash
-gh contribute login --app-id 123456 --key-path /path/to/private-key.pem
+contribute login --app-id 123456 --key-path /path/to/private-key.pem
 # GH_CONTRIBUTE_APP_ID is read from env if --app-id is omitted
-GH_CONTRIBUTE_APP_ID=123456 gh contribute login --key-path /path/to/private-key.pem
+GH_CONTRIBUTE_APP_ID=123456 contribute login --key-path /path/to/private-key.pem
 ```
 
 Stored credentials are used when env vars are not set. Env vars always take priority.
@@ -335,7 +331,7 @@ Stored credentials are used when env vars are not set. Env vars always take prio
 #### Check status
 
 ```bash
-gh contribute auth status
+contribute auth status
 # logged in as app: MyApp (app_id=123456)
 ```
 
@@ -351,32 +347,32 @@ export GH_CONTRIBUTE_TOKEN=github_pat_...
 
 #### Token lifecycle
 
-Installation tokens expire after 1 hour. gh-contribute automatically refreshes them via the `TokenProvider` — no manual intervention needed. If credentials become invalid, gh-contribute exits with:
+Installation tokens expire after 1 hour. contribute automatically refreshes them via the `TokenProvider` — no manual intervention needed. If credentials become invalid, contribute exits with:
 
 ```
-Error: token invalid or expired — run 'gh contribute login' to reauthenticate
+Error: token invalid or expired — run 'contribute login' to reauthenticate
 ```
 
 ## Auto-detection
 
-When `--pr` is not specified, gh-contribute automatically:
+When `--pr` is not specified, contribute automatically:
 
 1. Reads the current git branch name
 2. Searches for an open PR with that branch as the head
 3. Uses the first match
 
-When the repository is not specified (it never needs to be), gh-contribute:
+When the repository is not specified (it never needs to be), contribute:
 
 1. Reads the `origin` remote URL from git
 2. Parses the owner and repo name from it (supports both SSH and HTTPS remotes)
 
-This means in most cases you just run `gh contribute comments` with zero flags and it does the right thing.
+This means in most cases you just run `contribute comments` with zero flags and it does the right thing.
 
 ## Project Structure
 
 ```
-gh-contribute/
-├── cmd/gh-contribute/main.go           # entry point
+contribute/
+├── cmd/contribute/main.go              # entry point
 ├── internal/
 │   ├── client/
 │   │   ├── auth/                       # GitHub App authentication
@@ -425,7 +421,7 @@ Built with:
 The `.claude/hooks/session-start.sh` hook runs automatically at the start of every remote Claude Code session. It:
 
 1. Runs `go mod download` to warm the module cache
-2. Builds the extension binary
+2. Builds the binary
 3. Checks `auth status` — if `GH_CONTRIBUTE_APP_ID` and `GH_CONTRIBUTE_PRIVATE_KEY_PATH` are set, authentication is already active; otherwise the session exits with a clear error
 
 This ensures the agent always has valid GitHub credentials before it needs them, preventing mid-task authentication interruptions.
