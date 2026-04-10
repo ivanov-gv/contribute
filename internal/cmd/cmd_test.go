@@ -130,6 +130,19 @@ func TestGitCredentialsCmd_NoArgsIsNoop(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestTokenCmd_RequiresAuth(t *testing.T) {
+	// clear all auth env vars and point HOME to empty temp dir
+	t.Setenv("GH_CONTRIBUTE_TOKEN", "")
+	t.Setenv("GH_CONTRIBUTE_APP_ID", "")
+	t.Setenv("GH_CONTRIBUTE_PRIVATE_KEY", "")
+	t.Setenv("GH_CONTRIBUTE_PRIVATE_KEY_PATH", "")
+	t.Setenv("HOME", t.TempDir())
+
+	cmd := newTokenCmd()
+	err := cmd.Execute()
+	assert.Error(t, err)
+}
+
 func TestReactCmd_HasTypeFlag(t *testing.T) {
 	a := &app{}
 	cmd := a.newReactCmd()
