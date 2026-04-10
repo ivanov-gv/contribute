@@ -451,14 +451,14 @@ Use the `ENVIRONMENT` variable to distinguish between environments:
 
 ---
 
-# gh-contribute
+# contribute
 
-A GitHub CLI extension (`gh extension`) that lets AI agents interact with PRs as real contributors.
+A standalone CLI tool that lets AI agents interact with PRs as real contributors.
 
 ## Build & test
 
 ```bash
-make build                  # compile to bin/gh-contribute
+make build                  # compile to bin/contribute
 make install                # install to $GOPATH/bin
 make test                   # unit tests (race detector)
 make test-integration-local # integration tests with mock server (no token needed)
@@ -470,7 +470,7 @@ make fmt                    # gofmt
 
 ## Authentication
 
-Token priority (highest to lowest): `GH_CONTRIBUTE_TOKEN` env var → GitHub App env vars → stored `~/.config/gh-contribute/app.json`.
+Token priority (highest to lowest): `GH_CONTRIBUTE_TOKEN` env var → GitHub App env vars → stored `~/.config/contribute/app.json`.
 
 **GitHub App (installation token, auto-refreshed):**
 ```bash
@@ -479,14 +479,14 @@ export GH_CONTRIBUTE_APP_ID=<id>
 export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
 # optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
 
-# via CLI — persists to ~/.config/gh-contribute/app.json
-gh contribute login --app-id <id> --key-path /path/to/private-key.pem
+# via CLI — persists to ~/.config/contribute/app.json
+contribute login --app-id <id> --key-path /path/to/private-key.pem
 # --app-id can be omitted if GH_CONTRIBUTE_APP_ID is set
 
-gh contribute auth status         # show current app identity
+contribute auth status         # show current app identity
 ```
 
-If no credentials are configured, all commands exit with a non-zero code and an error pointing to `gh contribute login`.
+If no credentials are configured, all commands exit with a non-zero code and an error pointing to `contribute login`.
 
 ## Key architecture notes
 
@@ -499,17 +499,17 @@ If no credentials are configured, all commands exit with a non-zero code and an 
 ## Review-cycle workflow
 
 ```bash
-gh contribute issue <n>                            # read issue
-gh contribute pr [n]                               # show PR details
-gh contribute comments --pr <n>                    # list all comments + reviews
-gh contribute review <review-id> --pr <n>          # show inline comments for a review
-gh contribute thread <thread-id> --pr <n>          # show full thread
-gh contribute comment <body> --pr <n>              # post top-level comment
-gh contribute reply <comment-id> <body> --pr <n>   # reply to a review comment
-gh contribute react <comment-id> EYES              # acknowledge
-gh contribute react <comment-id> ROCKET            # signal done
-gh contribute resolve <thread-id> --pr <n>         # resolve thread
-gh contribute review-comment <body> --file <f> --line <l> --pr <n>  # inline comment
-gh contribute submit-review --event APPROVE --pr <n>
-gh contribute watch --pr <n>                       # poll for new activity
+contribute issue <n>                            # read issue
+contribute pr [n]                               # show PR details
+contribute comments --pr <n>                    # list all comments + reviews
+contribute review <review-id> --pr <n>          # show inline comments for a review
+contribute thread <thread-id> --pr <n>          # show full thread
+contribute comment <body> --pr <n>              # post top-level comment
+contribute reply <comment-id> <body> --pr <n>   # reply to a review comment
+contribute react <comment-id> EYES              # acknowledge
+contribute react <comment-id> ROCKET            # signal done
+contribute resolve <thread-id> --pr <n>         # resolve thread
+contribute review-comment <body> --file <f> --line <l> --pr <n>  # inline comment
+contribute submit-review --event APPROVE --pr <n>
+contribute watch --pr <n>                       # poll for new activity
 ```
