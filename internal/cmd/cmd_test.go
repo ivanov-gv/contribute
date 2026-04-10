@@ -15,9 +15,9 @@ func TestResolvePR_ExplicitNumber(t *testing.T) {
 	assert.Equal(t, 42, number)
 }
 
-func TestReactCmd_RequiresExactlyTwoArgs(t *testing.T) {
+func TestReactCommentCmd_RequiresExactlyTwoArgs(t *testing.T) {
 	a := &app{}
-	cmd := a.newReactCmd()
+	cmd := a.newReactCommentCmd()
 
 	t.Run("no args", func(t *testing.T) {
 		cmd.SetArgs([]string{})
@@ -32,19 +32,76 @@ func TestReactCmd_RequiresExactlyTwoArgs(t *testing.T) {
 	})
 
 	t.Run("three args", func(t *testing.T) {
-		cmd.SetArgs([]string{"123", "+1", "extra"})
+		cmd.SetArgs([]string{"123", "thumbsup", "extra"})
 		err := cmd.Execute()
 		assert.Error(t, err)
 	})
 }
 
-func TestReactCmd_InvalidCommentID(t *testing.T) {
+func TestReactCommentCmd_InvalidCommentID(t *testing.T) {
 	a := &app{}
-	cmd := a.newReactCmd()
-	cmd.SetArgs([]string{"not-a-number", "+1"})
+	cmd := a.newReactCommentCmd()
+	cmd.SetArgs([]string{"not-a-number", "thumbsup"})
 	err := cmd.Execute()
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid comment ID")
+}
+
+func TestReactReviewCmd_RequiresExactlyTwoArgs(t *testing.T) {
+	a := &app{}
+	cmd := a.newReactReviewCmd()
+
+	t.Run("no args", func(t *testing.T) {
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+		assert.Error(t, err)
+	})
+
+	t.Run("one arg", func(t *testing.T) {
+		cmd.SetArgs([]string{"456"})
+		err := cmd.Execute()
+		assert.Error(t, err)
+	})
+}
+
+func TestReactReviewCmd_InvalidReviewID(t *testing.T) {
+	a := &app{}
+	cmd := a.newReactReviewCmd()
+	cmd.SetArgs([]string{"not-a-number", "eyes"})
+	err := cmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid review ID")
+}
+
+func TestReactReviewCmd_HasPRFlag(t *testing.T) {
+	a := &app{}
+	cmd := a.newReactReviewCmd()
+	flag := cmd.Flags().Lookup("pr")
+	require.NotNil(t, flag)
+	assert.Equal(t, "0", flag.DefValue)
+}
+
+func TestReactIssueCommentCmd_InvalidCommentID(t *testing.T) {
+	a := &app{}
+	cmd := a.newReactIssueCommentCmd()
+	cmd.SetArgs([]string{"not-a-number", "rocket"})
+	err := cmd.Execute()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid comment ID")
+}
+
+func TestReactCmd_HasSubcommands(t *testing.T) {
+	a := &app{}
+	cmd := a.newReactCmd()
+
+	subNames := make(map[string]bool)
+	for _, sub := range cmd.Commands() {
+		subNames[sub.Name()] = true
+	}
+
+	assert.True(t, subNames["comment"], "react should have 'comment' subcommand")
+	assert.True(t, subNames["review"], "react should have 'review' subcommand")
+	assert.True(t, subNames["issue-comment"], "react should have 'issue-comment' subcommand")
 }
 
 func TestResolveCmd_RequiresExactlyOneArg(t *testing.T) {
@@ -79,10 +136,9 @@ func TestPRCmd_InvalidPRNumber(t *testing.T) {
 func TestCommandWiring(t *testing.T) {
 	a := &app{}
 
-	// verify command names and Use strings
 	commands := map[string]string{
 		"pr":        "pr [number]",
-		"react":     "react <comment-id> <reaction>",
+		"react":     "react",
 		"resolve":   "resolve <thread-id>",
 		"unresolve": "unresolve <thread-id>",
 	}
@@ -141,14 +197,6 @@ func TestTokenCmd_RequiresAuth(t *testing.T) {
 	cmd := newTokenCmd()
 	err := cmd.Execute()
 	assert.Error(t, err)
-}
-
-func TestReactCmd_HasTypeFlag(t *testing.T) {
-	a := &app{}
-	cmd := a.newReactCmd()
-	flag := cmd.Flags().Lookup("type")
-	require.NotNil(t, flag)
-	assert.Equal(t, "review", flag.DefValue)
 }
 
 func TestResolveCmd_HasPRFlag(t *testing.T) {

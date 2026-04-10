@@ -35,6 +35,10 @@ const (
 	prQueryPattern         = "closingIssuesReferences"
 	commentsQueryPattern   = "reactions(first: 100)"
 	allReviewsQueryPattern = "reviews(first: 100){nodes{databaseId"
+	// reviewNodeQueryPattern matches the reaction service's findReviewNodeID query,
+	// which only fetches {id,databaseId} — distinct from allReviewsQueryPattern which
+	// fetches databaseId as the first field followed by author, body, etc.
+	reviewNodeQueryPattern = "nodes{id,databaseId}"
 	threadsQueryPattern    = "nodes{id,isOutdated"
 	issueGetPattern        = "issue(number: $number)"
 	issueListPattern       = "states: OPEN, orderBy"
@@ -70,7 +74,7 @@ func (s *EdgeCaseSuite) SetupTest() {
 	rest := newRESTClient(s.server.URL)
 	s.prService = pr.NewService(gql, testOwner, testRepo)
 	s.commentService = comment.NewService(gql, rest, testOwner, testRepo)
-	s.reactionService = reaction.NewService(rest, testOwner, testRepo)
+	s.reactionService = reaction.NewService(rest, gql, testOwner, testRepo)
 	s.reviewService = review.NewService(gql, testOwner, testRepo)
 	s.threadService = thread.NewService(gql, testOwner, testRepo)
 	s.issueService = issue.NewService(gql, testOwner, testRepo)
