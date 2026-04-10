@@ -70,7 +70,7 @@ func (s *EdgeCaseSuite) SetupTest() {
 	rest := newRESTClient(s.server.URL)
 	s.prService = pr.NewService(gql, testOwner, testRepo)
 	s.commentService = comment.NewService(gql, rest, testOwner, testRepo)
-	s.reactionService = reaction.NewService(rest, testOwner, testRepo)
+	s.reactionService = reaction.NewService(rest, gql, testOwner, testRepo)
 	s.reviewService = review.NewService(gql, testOwner, testRepo)
 	s.threadService = thread.NewService(gql, testOwner, testRepo)
 	s.issueService = issue.NewService(gql, testOwner, testRepo)

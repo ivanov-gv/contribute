@@ -52,7 +52,7 @@ func (a *app) init() error {
 	a.cfg = cfg
 	a.prService = pr.NewService(gql, cfg.Owner, cfg.Repo)
 	a.commentService = comment.NewService(gql, rest, cfg.Owner, cfg.Repo)
-	a.reactionService = reaction.NewService(rest, cfg.Owner, cfg.Repo)
+	a.reactionService = reaction.NewService(rest, gql, cfg.Owner, cfg.Repo)
 	a.reviewService = review.NewService(gql, cfg.Owner, cfg.Repo)
 	a.threadService = thread.NewService(gql, cfg.Owner, cfg.Repo)
 	a.issueService = issue.NewService(gql, cfg.Owner, cfg.Repo)

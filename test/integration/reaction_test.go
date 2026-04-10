@@ -12,7 +12,7 @@ import (
 func (s *EdgeCaseSuite) TestAddReaction_IssueComment() {
 	s.server.OnREST(http.MethodPost, "/repos/testowner/testrepo/issues/comments/", http.StatusCreated, reactionResponse)
 
-	err := s.reactionService.AddToIssueComment(12345, "+1")
+	err := s.reactionService.AddToIssueComment(12345, "thumbsup")
 	require.NoError(s.T(), err)
 
 	reqs := s.server.Requests()
@@ -46,8 +46,17 @@ func (s *EdgeCaseSuite) TestAddReaction_InvalidType_ReviewComment() {
 	assert.Equal(s.T(), 0, s.server.RequestCount())
 }
 
+// TestAddReaction_OldPlusMinusOneRejected verifies that the old +1/-1 names are no longer accepted.
+func (s *EdgeCaseSuite) TestAddReaction_OldPlusMinusOneRejected() {
+	for _, old := range []string{"+1", "-1"} {
+		err := s.reactionService.AddToIssueComment(1, old)
+		require.Error(s.T(), err, "old reaction %q should be rejected", old)
+		assert.Contains(s.T(), err.Error(), "invalid reaction")
+	}
+}
+
 func (s *EdgeCaseSuite) TestAddReaction_AllValidTypes() {
-	validReactions := []string{"+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"}
+	validReactions := []string{"thumbsup", "thumbsdown", "laugh", "confused", "heart", "hooray", "rocket", "eyes"}
 	for _, r := range validReactions {
 		s.server.Reset()
 		s.server.OnREST(http.MethodPost, "/repos/testowner/testrepo/issues/comments/", http.StatusCreated, reactionResponse)
@@ -61,6 +70,6 @@ func (s *EdgeCaseSuite) TestAddReaction_ServerError() {
 	s.server.OnREST(http.MethodPost, "/repos/testowner/testrepo/issues/comments/", http.StatusInternalServerError,
 		map[string]interface{}{"message": "Internal Server Error"})
 
-	err := s.reactionService.AddToIssueComment(12345, "+1")
+	err := s.reactionService.AddToIssueComment(12345, "thumbsup")
 	require.Error(s.T(), err)
 }
