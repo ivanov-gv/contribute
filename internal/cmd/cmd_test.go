@@ -137,9 +137,10 @@ func TestCommandWiring(t *testing.T) {
 	a := &app{}
 
 	commands := map[string]string{
-		"pr":      "pr [number]",
-		"react":   "react",
-		"resolve": "resolve <thread-id>",
+		"pr":        "pr [number]",
+		"react":     "react",
+		"resolve":   "resolve <thread-id>",
+		"unresolve": "unresolve <thread-id>",
 	}
 
 	for name, expectedUse := range commands {
@@ -153,6 +154,9 @@ func TestCommandWiring(t *testing.T) {
 				assert.Equal(t, expectedUse, c.Use)
 			case "resolve":
 				c := a.newResolveCmd()
+				assert.Equal(t, expectedUse, c.Use)
+			case "unresolve":
+				c := a.newUnresolveCmd()
 				assert.Equal(t, expectedUse, c.Use)
 			}
 		})

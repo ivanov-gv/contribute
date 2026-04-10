@@ -35,6 +35,10 @@ const (
 	prQueryPattern         = "closingIssuesReferences"
 	commentsQueryPattern   = "reactions(first: 100)"
 	allReviewsQueryPattern = "reviews(first: 100){nodes{databaseId"
+	// reviewNodeQueryPattern matches the reaction service's findReviewNodeID query,
+	// which only fetches {id,databaseId} — distinct from allReviewsQueryPattern which
+	// fetches databaseId as the first field followed by author, body, etc.
+	reviewNodeQueryPattern = "nodes{id,databaseId}"
 	threadsQueryPattern    = "nodes{id,isOutdated"
 	issueGetPattern        = "issue(number: $number)"
 	issueListPattern       = "states: OPEN, orderBy"
