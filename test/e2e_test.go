@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	testDataDir = "ivanov-gv.gh-contribute.pr#1"
+	testDataDir = "ivanov-gv.contribute.pr#1"
 	prNumber    = "1"
 )
 
