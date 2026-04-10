@@ -8,7 +8,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 
-	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
+	"github.com/ivanov-gv/contribute/internal/utils/pagination"
 )
 
 // graphQLQuerier executes GraphQL queries

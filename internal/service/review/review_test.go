@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
+	graphql_model "github.com/ivanov-gv/contribute/internal/model/graphql"
 )
 
 func TestCollectGroupsNoDiff(t *testing.T) {

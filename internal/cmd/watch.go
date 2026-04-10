@@ -116,7 +116,7 @@ func (a *app) watchLoop(ctx context.Context, prNumber int, interval time.Duratio
 					fmt.Println(r.Body)
 				}
 				if r.CommentCount > 0 {
-					fmt.Printf("(%d inline comments — run: gh-contribute review %d --pr %d)\n",
+					fmt.Printf("(%d inline comments — run: contribute review %d --pr %d)\n",
 						r.CommentCount, r.DatabaseID, prNumber)
 				}
 			}

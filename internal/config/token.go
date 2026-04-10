@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
+	"github.com/ivanov-gv/contribute/internal/client/auth"
 )
 
 const (

@@ -15,13 +15,13 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/ivanov-gv/gh-contribute/internal/service/comment"
-	"github.com/ivanov-gv/gh-contribute/internal/service/issue"
-	"github.com/ivanov-gv/gh-contribute/internal/service/pr"
-	"github.com/ivanov-gv/gh-contribute/internal/service/reaction"
-	"github.com/ivanov-gv/gh-contribute/internal/service/review"
-	"github.com/ivanov-gv/gh-contribute/internal/service/thread"
-	"github.com/ivanov-gv/gh-contribute/test/integration/testserver"
+	"github.com/ivanov-gv/contribute/internal/service/comment"
+	"github.com/ivanov-gv/contribute/internal/service/issue"
+	"github.com/ivanov-gv/contribute/internal/service/pr"
+	"github.com/ivanov-gv/contribute/internal/service/reaction"
+	"github.com/ivanov-gv/contribute/internal/service/review"
+	"github.com/ivanov-gv/contribute/internal/service/thread"
+	"github.com/ivanov-gv/contribute/test/integration/testserver"
 )
 
 const (

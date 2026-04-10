@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ivanov-gv/gh-contribute/internal/service/issue"
+	"github.com/ivanov-gv/contribute/internal/service/issue"
 )
 
 func (a *app) newIssueCmd() *cobra.Command {

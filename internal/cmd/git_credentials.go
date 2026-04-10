@@ -9,13 +9,13 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ivanov-gv/gh-contribute/internal/config"
+	"github.com/ivanov-gv/contribute/internal/config"
 )
 
 const githubHost = "github.com"
 
 // newGitCredentialsCmd implements the git credential helper protocol for GitHub App tokens.
-// Git calls this command as: gh-contribute git-credentials <operation>
+// Git calls this command as: contribute git-credentials <operation>
 // where operation is one of: get, store, erase.
 // Only "get" is handled; "store" and "erase" are no-ops since tokens are managed by the app.
 func newGitCredentialsCmd() *cobra.Command {

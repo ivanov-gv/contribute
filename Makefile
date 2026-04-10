@@ -2,7 +2,7 @@
 -include .env
 export
 
-BINARY    := gh-contribute
+BINARY    := contribute
 BUILD_DIR := bin
 
 .PHONY: build test test-integration lint fmt tidy clean install
@@ -55,9 +55,9 @@ LDFLAGS  := -ldflags="-s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)"
 
 ## release-build: cross-compile stripped binaries for all platforms
 release-build:
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/gh-contribute-windows-amd64.exe ./cmd/gh-contribute/
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/gh-contribute-linux-amd64 ./cmd/gh-contribute/
-	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/gh-contribute-darwin-amd64 ./cmd/gh-contribute/
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/contribute-windows-amd64.exe ./cmd/contribute/
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/contribute-linux-amd64 ./cmd/contribute/
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -trimpath $(LDFLAGS) -o build/contribute-darwin-amd64 ./cmd/contribute/
 	# git tag v0.0.0
 	# git push origin v0.0.0
 	# gh release create v0.0.0 ./build/*amd64*

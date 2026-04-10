@@ -4,7 +4,7 @@ package graphql
 import (
 	"github.com/shurcooL/githubv4"
 
-	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
+	"github.com/ivanov-gv/contribute/internal/utils/format"
 )
 
 // ReactionNode is a single reaction with content and author, used in GraphQL queries.

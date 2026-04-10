@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
+	"github.com/ivanov-gv/contribute/internal/utils/format"
 )
 
 func TestReviewDetail_Format(t *testing.T) {

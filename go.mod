@@ -1,4 +1,4 @@
-module github.com/ivanov-gv/gh-contribute
+module github.com/ivanov-gv/contribute
 
 go 1.24.7
 

@@ -7,9 +7,9 @@ import (
 	"github.com/samber/lo"
 	"github.com/shurcooL/githubv4"
 
-	graphql_model "github.com/ivanov-gv/gh-contribute/internal/model/graphql"
-	"github.com/ivanov-gv/gh-contribute/internal/utils/format"
-	"github.com/ivanov-gv/gh-contribute/internal/utils/pagination"
+	graphql_model "github.com/ivanov-gv/contribute/internal/model/graphql"
+	"github.com/ivanov-gv/contribute/internal/utils/format"
+	"github.com/ivanov-gv/contribute/internal/utils/pagination"
 )
 
 // graphQLClient executes GraphQL queries and mutations

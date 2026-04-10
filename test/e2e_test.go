@@ -74,8 +74,8 @@ func TestE2E(t *testing.T) {
 	}
 
 	// build binary
-	binaryPath := filepath.Join(t.TempDir(), "gh-contribute")
-	buildCmd := exec.CommandContext(context.Background(), "go", "build", "-o", binaryPath, "./cmd/gh-contribute") //nolint:gosec // test builds known binary
+	binaryPath := filepath.Join(t.TempDir(), "contribute")
+	buildCmd := exec.CommandContext(context.Background(), "go", "build", "-o", binaryPath, "./cmd/contribute") //nolint:gosec // test builds known binary
 	buildCmd.Dir = ".."
 	out, err := buildCmd.CombinedOutput()
 	require.NoError(t, err, "build failed: %s", string(out))
