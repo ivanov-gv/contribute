@@ -1,3 +1,5 @@
+// Package auth implements GitHub App authentication: JWT generation,
+// installation token exchange, and automatic token refresh via TokenProvider.
 package auth
 
 import (

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
 )
 
 const (
@@ -21,6 +23,36 @@ type storedAppConfig struct {
 	AppID          int64  `json:"app_id"`
 	PrivateKeyPath string `json:"private_key_path"`
 	InstallationID int64  `json:"installation_id,omitempty"`
+}
+
+// LoadAppConfig returns the active GitHub App configuration.
+// Priority: env vars (GH_CONTRIBUTE_APP_ID + PRIVATE_KEY) → stored ~/.config/gh-contribute/app.json.
+// Returns nil, nil when no app credentials are configured.
+func LoadAppConfig() (*auth.AppConfig, error) {
+	// env vars take priority — CI / non-interactive environments
+	appCfg, err := auth.LoadAppConfig()
+	if err != nil {
+		return nil, fmt.Errorf("auth.LoadAppConfig: %w", err)
+	}
+	if appCfg != nil {
+		return appCfg, nil
+	}
+
+	// fall back to stored credentials file
+	return loadStoredAppConfig()
+}
+
+// loadStoredAppConfig reads app credentials from the config file and converts them to AppConfig.
+// Returns nil, nil when no config file exists.
+func loadStoredAppConfig() (*auth.AppConfig, error) {
+	stored, err := loadAppCredentials()
+	if err != nil {
+		return nil, fmt.Errorf("loadAppCredentials: %w", err)
+	}
+	if stored == nil {
+		return nil, nil
+	}
+	return auth.LoadAppConfigFromPath(stored.AppID, stored.PrivateKeyPath, stored.InstallationID)
 }
 
 // SaveAppCredentials persists the GitHub App credentials to ~/.config/gh-contribute/app.json.
