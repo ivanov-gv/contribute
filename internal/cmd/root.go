@@ -93,6 +93,8 @@ func Execute() {
 		newAuthCmd(),
 		// git-credentials is a hidden command implementing the git credential helper protocol
 		newGitCredentialsCmd(),
+		// token prints a valid token to stdout for use with gh CLI and other tools
+		newTokenCmd(),
 		// authenticated commands — app is initialized via PersistentPreRunE
 		_app.newPRCmd(),
 		_app.newCommentsCmd(),
