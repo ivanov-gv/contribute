@@ -7,12 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
+	"github.com/ivanov-gv/contribute/internal/client/auth"
 )
 
 const (
 	// appConfigPath is the app credentials file path relative to the user's home directory.
-	appConfigPath = ".config/gh-contribute/app.json"
+	appConfigPath = ".config/contribute/app.json"
 
 	// appConfigFilePermissions is the permission mode for the app config file (owner-only read/write).
 	appConfigFilePermissions = 0600
@@ -26,7 +26,7 @@ type storedAppConfig struct {
 }
 
 // LoadAppConfig returns the active GitHub App configuration.
-// Priority: env vars (GH_CONTRIBUTE_APP_ID + PRIVATE_KEY) → stored ~/.config/gh-contribute/app.json.
+// Priority: env vars (GH_CONTRIBUTE_APP_ID + PRIVATE_KEY) → stored ~/.config/contribute/app.json.
 // Returns nil, nil when no app credentials are configured.
 func LoadAppConfig() (*auth.AppConfig, error) {
 	// env vars take priority — CI / non-interactive environments
@@ -55,7 +55,7 @@ func loadStoredAppConfig() (*auth.AppConfig, error) {
 	return auth.LoadAppConfigFromPath(stored.AppID, stored.PrivateKeyPath, stored.InstallationID)
 }
 
-// SaveAppCredentials persists the GitHub App credentials to ~/.config/gh-contribute/app.json.
+// SaveAppCredentials persists the GitHub App credentials to ~/.config/contribute/app.json.
 func SaveAppCredentials(appID int64, keyPath string, installationID int64) error {
 	path, err := appConfigFilePath()
 	if err != nil {
@@ -83,7 +83,7 @@ func SaveAppCredentials(appID int64, keyPath string, installationID int64) error
 	return nil
 }
 
-// LoadStoredAppCredentials reads the stored app credentials from ~/.config/gh-contribute/app.json
+// LoadStoredAppCredentials reads the stored app credentials from ~/.config/contribute/app.json
 // and returns (AppID, PrivateKeyPath). Returns (0, "") when no file exists.
 func LoadStoredAppCredentials() (appID int64, keyPath string, err error) {
 	cfg, err := loadAppCredentials()
@@ -96,7 +96,7 @@ func LoadStoredAppCredentials() (appID int64, keyPath string, err error) {
 	return cfg.AppID, cfg.PrivateKeyPath, nil
 }
 
-// loadAppCredentials reads the stored app credentials from ~/.config/gh-contribute/app.json.
+// loadAppCredentials reads the stored app credentials from ~/.config/contribute/app.json.
 // Returns nil, nil when the file does not exist (app auth not configured via CLI).
 func loadAppCredentials() (*storedAppConfig, error) {
 	path, err := appConfigFilePath()

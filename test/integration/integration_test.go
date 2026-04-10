@@ -23,11 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	githubclient "github.com/ivanov-gv/gh-contribute/internal/client/github"
-	"github.com/ivanov-gv/gh-contribute/internal/service/comment"
-	"github.com/ivanov-gv/gh-contribute/internal/service/pr"
-	"github.com/ivanov-gv/gh-contribute/internal/service/review"
-	"github.com/ivanov-gv/gh-contribute/internal/service/thread"
+	githubclient "github.com/ivanov-gv/contribute/internal/client/github"
+	"github.com/ivanov-gv/contribute/internal/service/comment"
+	"github.com/ivanov-gv/contribute/internal/service/pr"
+	"github.com/ivanov-gv/contribute/internal/service/review"
+	"github.com/ivanov-gv/contribute/internal/service/thread"
 )
 
 const (

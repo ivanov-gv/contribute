@@ -8,7 +8,7 @@ import (
 
 	"github.com/joho/godotenv"
 
-	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
+	"github.com/ivanov-gv/contribute/internal/client/auth"
 )
 
 // Config holds the runtime configuration.
@@ -20,7 +20,7 @@ type Config struct {
 }
 
 // Load reads configuration from the environment and git context.
-// Token priority: GH_CONTRIBUTE_TOKEN env var → GitHub App credentials → ~/.config/gh-contribute/token file.
+// Token priority: GH_CONTRIBUTE_TOKEN env var → GitHub App credentials → ~/.config/contribute/token file.
 func Load() (*Config, error) {
 	// load .env if present (ignore error — file is optional)
 	_ = godotenv.Load()

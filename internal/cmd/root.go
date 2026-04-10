@@ -10,14 +10,14 @@ import (
 	"github.com/shurcooL/githubv4"
 	"github.com/spf13/cobra"
 
-	ghclient "github.com/ivanov-gv/gh-contribute/internal/client/github"
-	"github.com/ivanov-gv/gh-contribute/internal/config"
-	"github.com/ivanov-gv/gh-contribute/internal/service/comment"
-	"github.com/ivanov-gv/gh-contribute/internal/service/issue"
-	"github.com/ivanov-gv/gh-contribute/internal/service/pr"
-	"github.com/ivanov-gv/gh-contribute/internal/service/reaction"
-	"github.com/ivanov-gv/gh-contribute/internal/service/review"
-	"github.com/ivanov-gv/gh-contribute/internal/service/thread"
+	ghclient "github.com/ivanov-gv/contribute/internal/client/github"
+	"github.com/ivanov-gv/contribute/internal/config"
+	"github.com/ivanov-gv/contribute/internal/service/comment"
+	"github.com/ivanov-gv/contribute/internal/service/issue"
+	"github.com/ivanov-gv/contribute/internal/service/pr"
+	"github.com/ivanov-gv/contribute/internal/service/reaction"
+	"github.com/ivanov-gv/contribute/internal/service/review"
+	"github.com/ivanov-gv/contribute/internal/service/thread"
 )
 
 // app holds shared dependencies for all authenticated commands.
@@ -68,8 +68,8 @@ func Execute() {
 	_app := &app{}
 
 	rootCmd := &cobra.Command{
-		Use:          "gh-contribute",
-		Short:        "A gh extension for simplifying agents interaction with PRs on GitHub",
+		Use:          "contribute",
+		Short:        "A CLI tool for simplifying agents interaction with PRs on GitHub",
 		SilenceUsage: true,
 		// initialize app before any authenticated command runs
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

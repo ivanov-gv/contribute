@@ -9,9 +9,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
-	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
-	"github.com/ivanov-gv/gh-contribute/internal/client/git"
-	"github.com/ivanov-gv/gh-contribute/internal/config"
+	"github.com/ivanov-gv/contribute/internal/client/auth"
+	"github.com/ivanov-gv/contribute/internal/client/git"
+	"github.com/ivanov-gv/contribute/internal/config"
 )
 
 // newLoginCmd stores GitHub App credentials for non-interactive authentication.
@@ -23,14 +23,14 @@ func newLoginCmd() *cobra.Command {
 		Long: `Store GitHub App credentials for automatic installation-token authentication.
 
 The App must be installed on your target repository. If --installation-id is
-omitted, gh-contribute auto-detects the first installation.
+omitted, contribute auto-detects the first installation.
 
 If GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH are set, credentials
 are loaded from those env vars automatically — no need to run this command.
 
 Example:
-  gh contribute login --app-id 123456 --key-path ~/.config/gh-contribute/private-key.pem
-  GH_CONTRIBUTE_APP_ID=123456 gh contribute login --key-path ~/.config/gh-contribute/private-key.pem`,
+  contribute login --app-id 123456 --key-path ~/.config/contribute/private-key.pem
+  GH_CONTRIBUTE_APP_ID=123456 contribute login --key-path ~/.config/contribute/private-key.pem`,
 		// skip app initialization — login does not require a stored token
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -84,9 +84,9 @@ Example:
 				return fmt.Errorf(logfmt+"config.SaveAppCredentials: %w", err)
 			}
 
-			// configure git to use gh-contribute as the credential helper for github.com,
+			// configure git to use contribute as the credential helper for github.com,
 			// so that 'git push' works automatically without extra auth steps
-			if err := git.SetupCredentialHelper("gh-contribute git-credentials"); err != nil {
+			if err := git.SetupCredentialHelper("contribute git-credentials"); err != nil {
 				log.Warn().Err(err).Msg(logfmt + "git credential helper setup failed — git push may require manual auth")
 			} else {
 				log.Info().Msg(logfmt + "git credential helper configured for github.com")
@@ -133,7 +133,7 @@ func newAuthStatusCmd() *cobra.Command {
 				return fmt.Errorf(logfmt+"config.LoadAppConfig: %w", err)
 			}
 			if appCfg == nil {
-				return fmt.Errorf(logfmt + "not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute login'")
+				return fmt.Errorf(logfmt + "not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'contribute login'")
 			}
 
 			appName, err := auth.GetAppName(context.Background(), appCfg.AppID, appCfg.PrivateKey)

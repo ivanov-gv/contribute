@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/ivanov-gv/gh-contribute/internal/service/reaction"
+	"github.com/ivanov-gv/contribute/internal/service/reaction"
 )
 
 const reactArgCount = 2 // <comment-id> <reaction>
