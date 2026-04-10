@@ -1,4 +1,4 @@
-review #3929758963 by you (@ivanov-gv)  
+review #3929758963 by @ivanov-gv  
 _2026-03-11 13:51:01_
 
 >7. A review by @ivanov-gv 
@@ -7,7 +7,7 @@ _2026-03-11 13:51:01_
 >
 >
 >thread #2918508377  TODO.md on line +48  
->comment #2918508377 by you (@ivanov-gv)  
+>comment #2918508377 by @ivanov-gv  
 >_2026-03-11 13:51:01_
 >
 >7.1 A conversation with a huge markdown body. Has a rocket and eyes reactions by the bot. TODO.md on line R48
@@ -92,4 +92,4 @@ _2026-03-11 13:51:01_
 >that's it. good luck!
 
 (1 👀 1 🚀)  
-reactions by you:  
+reactions by you: (1 👀 1 🚀)  

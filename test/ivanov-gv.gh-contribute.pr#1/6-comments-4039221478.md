@@ -1,4 +1,4 @@
-issue #4039221478 by @ai-contributor-helper  
+issue #4039221478 by you (@ai-contributor-helper)  
 _2026-03-11 13:29:09_  
 
 >6. An unresolved comment by the bot with markdown inside

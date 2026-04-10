@@ -1,57 +1,57 @@
-issue #4038597073 by @ai-contributor-helper | hidden: Resolved  
+issue #4038597073 by you (@ai-contributor-helper) | hidden: Resolved  
 _2026-03-11 11:33:27_  
 
 >1. A hidden comment from the bot, marked as resolved
 
 (1 🚀)  
-reactions by you:  
+reactions by you: (1 🚀)  
 
 ---
-issue #4038819817 by you (@ivanov-gv) | hidden: Resolved  
+issue #4038819817 by @ivanov-gv | hidden: Resolved  
 _2026-03-11 12:15:54_  
 
 >2. A hidden comment from @ivanov-gv , marked as resolved
 
 (1 😕)  
-reactions by you: (1 😕)  
+reactions by you:  
 
 ---
-review #3929204495 by you (@ivanov-gv) | hidden: Resolved  
+review #3929204495 by @ivanov-gv | hidden: Resolved  
 _2026-03-11 12:17:34_  
 
 >3. A hidden review, marked as resolved, with eyes emoji
 
 comments: 2  
 (1 👀)  
-reactions by you: (1 👀)  
+reactions by you:  
 
 ---
-review #3929240428 by you (@ivanov-gv)  
+review #3929240428 by @ivanov-gv  
 _2026-03-11 12:24:52_  
 
 comments: 1  
 
 ---
-review #3929353771 by you (@ivanov-gv) | hidden: Resolved  
+review #3929353771 by @ivanov-gv | hidden: Resolved  
 _2026-03-11 12:45:28_  
 
 >4. A resolved review with a confused emoji reaction
 
 comments: 1  
 (1 😕)  
-reactions by you: (1 😕)  
+reactions by you:  
 
 ---
-issue #4039142865 by @ai-contributor-helper | hidden: Resolved  
+issue #4039142865 by you (@ai-contributor-helper) | hidden: Resolved  
 _2026-03-11 13:16:19_  
 
 >5. A resolved comment posted by the bot
 
 (1 👀)  
-reactions by you:  
+reactions by you: (1 👀)  
 
 ---
-issue #4039221478 by @ai-contributor-helper  
+issue #4039221478 by you (@ai-contributor-helper)  
 _2026-03-11 13:29:09_  
 
 >6. An unresolved comment by the bot with markdown inside
@@ -71,7 +71,7 @@ _2026-03-11 13:29:09_
 >- Output is human-readable markdown, not JSON
 
 ---
-review #3929758963 by you (@ivanov-gv)  
+review #3929758963 by @ivanov-gv  
 _2026-03-11 13:51:01_  
 
 >7. A review by @ivanov-gv 
@@ -81,7 +81,7 @@ _2026-03-11 13:51:01_
 comments: 1  
 
 ---
-issue #4039593663 by @ai-contributor-helper  
+issue #4039593663 by you (@ai-contributor-helper)  
 _2026-03-11 14:25:31_  
 
 >8. A markdown comment from the bot
@@ -97,7 +97,7 @@ _2026-03-11 14:25:31_
 >- **New command**: `review <id>` — shows inline comments with thread grouping (replies indented with `>`)
 
 ---
-review #3930039277 by you (@ivanov-gv)  
+review #3930039277 by @ivanov-gv  
 _2026-03-11 14:31:04_  
 
 >9. A review from @ivanov-gv 
@@ -106,7 +106,7 @@ _2026-03-11 14:31:04_
 comments: 3  
 
 ---
-issue #4041153603 by @ai-contributor-helper  
+issue #4041153603 by you (@ai-contributor-helper)  
 _2026-03-11 18:11:44_  
 
 >10. A comment from the bot
@@ -118,17 +118,17 @@ _2026-03-11 18:11:44_
 >- **`review` command**: shows comment IDs, file+line location, reactions; `---` separator before comments; no diff hunk (commit hash not accessible via GitHub App)
 
 ---
-issue #4042410800 by @ai-contributor-helper  
+issue #4042410800 by you (@ai-contributor-helper)  
 _2026-03-11 21:42:18_  
 
 >11. A comment from the bot with eyes emoji
 >refactoring test
 
 (1 👀)  
-reactions by you:  
+reactions by you: (1 👀)  
 
 ---
-issue #4067633036 by you (@ivanov-gv)  
+issue #4067633036 by @ivanov-gv  
 _2026-03-16 13:22:54_  
 
 >12. A comment by @ivanov-gv posted with the bot.

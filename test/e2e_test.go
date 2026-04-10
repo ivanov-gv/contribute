@@ -18,6 +18,8 @@ import (
 const (
 	testDataDir = "ivanov-gv.gh-contribute.pr#1"
 	prNumber    = "1"
+	realOwner   = "ivanov-gv"
+	realRepo    = "gh-contribute"
 )
 
 // testCase maps a CLI command to its expected output file
@@ -90,7 +92,11 @@ func TestE2E(t *testing.T) {
 			// run binary
 			cmd := exec.CommandContext(context.Background(), binaryPath, tc.args...) //nolint:gosec // test runs known binary with test args
 			cmd.Dir = ".."
-			cmd.Env = append(os.Environ(), "GH_CONTRIBUTE_TOKEN="+token)
+			cmd.Env = append(os.Environ(),
+				"GH_CONTRIBUTE_TOKEN="+token,
+				"GH_CONTRIBUTE_OWNER="+realOwner,
+				"GH_CONTRIBUTE_REPO="+realRepo,
+			)
 			stdout, err := cmd.Output()
 			require.NoError(t, err, "command failed: %s\nstderr: %s", tc.name, getStderr(cmd, err))
 
