@@ -10,7 +10,7 @@ A CLI tool that lets AI agents interact with pull requests as real contributors 
 
 ```bash
 # install
-go install github.com/ivanov-gv/contribute@latest
+go install github.com/ivanov-gv/contribute/cmd/contribute@latest
 
 # see PR details (auto-detects from current branch)
 contribute pr
@@ -30,6 +30,18 @@ contribute review 3929204495
 
 # show all comments in a thread across reviews (use thread id from review output)
 contribute thread 2935138407
+
+# reply to a review comment in-thread
+contribute reply 2935138407 "Fixed, thanks"
+
+# resolve a thread
+contribute resolve 2935138407
+
+# post an inline review comment
+contribute review-comment "Nit: rename this variable" --file internal/cmd/pr.go --line 42
+
+# approve a PR
+contribute submit-review --event APPROVE --body "LGTM"
 ```
 
 All commands auto-detect the repository (from git remote) and PR number (from current branch). Authentication uses a GitHub App — set `GH_CONTRIBUTE_APP_ID` and `GH_CONTRIBUTE_PRIVATE_KEY_PATH` to authenticate automatically on startup.
@@ -137,6 +149,12 @@ contribute comments
 
 # specify PR
 contribute comments --pr 42
+
+# show a single comment by id
+contribute comments 4038597073
+
+# show content of hidden/minimized comments
+contribute comments --show-hidden
 ```
 
 Output:
@@ -280,12 +298,121 @@ Yes, you fixed this particular issue on this line in this file, ...
 
 Typical workflow: `review` for focused reading of one review's feedback; `thread <id>` when you need the full cross-review conversation.
 
+### `contribute reply`
+
+Post a threaded reply to a specific review comment. Use the comment id from the `review` or `thread` output.
+
+```bash
+contribute reply 2935138407 "Fixed in the latest commit, thanks for the catch"
+
+contribute reply 2935138407 "Can you clarify what you mean here?" --pr 42
+```
+
+### `contribute resolve` / `contribute unresolve`
+
+Resolve or unresolve a review thread. Use the thread id from the `review` output.
+
+```bash
+contribute resolve 2935138407
+contribute resolve 2935138407 --pr 42
+
+contribute unresolve 2935138407
+```
+
+### `contribute review-comment`
+
+Post an inline review comment on a specific file and line.
+
+```bash
+contribute review-comment "Nit: rename this to be more descriptive" --file internal/cmd/pr.go --line 42
+
+# specify diff side (RIGHT is default)
+contribute review-comment "This was removed" --file internal/cmd/pr.go --line 10 --side LEFT
+
+contribute review-comment "Missing error check" --file internal/cmd/pr.go --line 42 --pr 42
+```
+
+### `contribute submit-review`
+
+Submit a review with an event type.
+
+```bash
+# approve
+contribute submit-review --event APPROVE
+
+# request changes with a body
+contribute submit-review --event REQUEST_CHANGES --body "Please address the comments above before merging"
+
+# leave a comment-only review
+contribute submit-review --event COMMENT --body "Some thoughts inline, no blocking issues"
+
+# specify PR explicitly
+contribute submit-review --event APPROVE --pr 42
+```
+
+Valid events: `APPROVE`, `REQUEST_CHANGES`, `COMMENT`
+
+### `contribute issue`
+
+Show issue details.
+
+```bash
+contribute issue 42
+```
+
+### `contribute issues`
+
+List open issues in the repository.
+
+```bash
+# list open issues (default limit: 20)
+contribute issues
+
+# filter by label
+contribute issues --label bug
+contribute issues --label "bug,help wanted"
+
+# increase limit
+contribute issues --limit 50
+```
+
+### `contribute issue-comment`
+
+Post a comment on an issue.
+
+```bash
+contribute issue-comment 42 "Looking into this now"
+```
+
+### `contribute watch`
+
+Poll for new activity on a PR and print changes as they appear.
+
+```bash
+# poll every 30 seconds (default)
+contribute watch
+
+# custom interval
+contribute watch --interval 1m
+
+contribute watch --pr 42 --interval 15s
+```
+
+### `contribute token`
+
+Print the active GitHub token to stdout. Follows the same priority chain as all other commands. Useful for passing the token to other tools.
+
+```bash
+GH_TOKEN=$(contribute token) gh pr view 123
+GH_TOKEN=$(contribute token) gh api /user
+```
+
 ## Installation
 
 ### Via go install
 
 ```bash
-go install github.com/ivanov-gv/contribute@latest
+go install github.com/ivanov-gv/contribute/cmd/contribute@latest
 ```
 
 ### From source
@@ -305,10 +432,19 @@ contribute authenticates as a **GitHub App**. API calls appear as `yourapp[bot]`
 Set these variables before running any command — contribute authenticates automatically on startup:
 
 ```bash
-export GH_CONTRIBUTE_APP_ID=123456
-export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
+export GH_CONTRIBUTE_APP_ID=3063096
+export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/home/vscode/.config/gh-contribute/private-key.pem
 # optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
 ```
+
+Alternatively, supply the PEM key inline as a base64-encoded string (useful in CI where writing a file is inconvenient):
+
+```bash
+export GH_CONTRIBUTE_APP_ID=3063096
+export GH_CONTRIBUTE_PRIVATE_KEY=$(base64 < /path/to/private-key.pem)
+```
+
+`GH_CONTRIBUTE_PRIVATE_KEY` takes priority over `GH_CONTRIBUTE_PRIVATE_KEY_PATH` when both are set.
 
 If neither env vars nor stored credentials are present, contribute exits with a non-zero code and prompts you to authenticate:
 
@@ -321,18 +457,32 @@ Error: not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_
 To store credentials in `~/.config/contribute/app.json` instead of setting env vars every time:
 
 ```bash
-contribute login --app-id 123456 --key-path /path/to/private-key.pem
+contribute login --app-id 3063096 --key-path /home/vscode/.config/gh-contribute/private-key.pem
 # GH_CONTRIBUTE_APP_ID is read from env if --app-id is omitted
-GH_CONTRIBUTE_APP_ID=123456 contribute login --key-path /path/to/private-key.pem
+GH_CONTRIBUTE_APP_ID=3063096 contribute login --key-path /home/vscode/.config/gh-contribute/private-key.pem
 ```
 
 Stored credentials are used when env vars are not set. Env vars always take priority.
+
+In addition to storing credentials, `contribute login` automatically configures git for the app's bot identity:
+
+```
+INF login: git credential helper configured for github.com
+INF login: git identity configured user.email=115546723+ai-contributor-helper[bot]@users.noreply.github.com user.name=ai-contributor-helper[bot]
+INF login: authenticated successfully app=AI contributor helper app_id=3063096
+```
+
+This sets:
+- `git config --global user.name` → `{app-slug}[bot]`
+- `git config --global user.email` → `{installation_id}+{app-slug}[bot]@users.noreply.github.com`
+
+So `git commit` and `git push` work immediately after login with no further setup.
 
 #### Check status
 
 ```bash
 contribute auth status
-# logged in as app: MyApp (app_id=123456)
+# logged in as app: AI contributor helper (app_id=3063096)
 ```
 
 #### CI and non-interactive environments
@@ -386,10 +536,19 @@ contribute/
 │   │   ├── auth.go                     # login (top-level) / auth status commands
 │   │   ├── pr.go                       # pr command + PR auto-detection
 │   │   ├── comments.go                 # comments command
-│   │   ├── comment.go                  # comment command (post)
+│   │   ├── comment.go                  # comment command (post top-level comment)
 │   │   ├── react.go                    # react command
 │   │   ├── review.go                   # review command (inline comment detail)
-│   │   └── thread.go                   # thread command (full thread across reviews)
+│   │   ├── thread.go                   # thread command (full thread across reviews)
+│   │   ├── reply.go                    # reply command (threaded reply)
+│   │   ├── resolve.go                  # resolve / unresolve commands
+│   │   ├── review_comment.go           # review-comment command (inline post)
+│   │   ├── submit_review.go            # submit-review command
+│   │   ├── issue.go                    # issue command
+│   │   ├── issue_comment.go            # issue-comment command
+│   │   ├── watch.go                    # watch command (poll for new activity)
+│   │   ├── token.go                    # token command (print active token)
+│   │   └── git_credentials.go          # git-credentials helper (hidden command)
 │   ├── config/
 │   │   ├── config.go                   # Config struct, Load(), repo detection from git remote
 │   │   ├── app.go                      # LoadAppConfig(), SaveAppCredentials(), stored app.json
@@ -402,9 +561,6 @@ contribute/
 │       ├── review/                     # review detail — inline comments grouped by thread
 │       ├── thread/                     # full thread across all reviews via GraphQL
 │       └── issue/                      # issue info and formatting
-├── .claude/
-│   ├── hooks/session-start.sh          # SessionStart hook: build + auth check
-│   └── settings.json                   # Claude Code hook registration
 ├── go.mod
 └── go.sum
 ```
@@ -416,20 +572,7 @@ Built with:
 - [joho/godotenv](https://github.com/joho/godotenv) — `.env` file loading
 - [rs/zerolog](https://github.com/rs/zerolog) — structured logging
 
-### Claude Code on the web
-
-The `.claude/hooks/session-start.sh` hook runs automatically at the start of every remote Claude Code session. It:
-
-1. Runs `go mod download` to warm the module cache
-2. Builds the binary
-3. Checks `auth status` — if `GH_CONTRIBUTE_APP_ID` and `GH_CONTRIBUTE_PRIVATE_KEY_PATH` are set, authentication is already active; otherwise the session exits with a clear error
-
-This ensures the agent always has valid GitHub credentials before it needs them, preventing mid-task authentication interruptions.
-
 ## Ways to Improve
 
-- **Reply to review comments** — post threaded replies to specific inline comments
-- **Diff-aware new comments** — post inline review comments on specific files and lines
 - **Webhook listener** — built-in server that watches for review events and triggers agent actions
 - **Multi-PR support** — list and manage comments across all open PRs in a repo
-- **Token refresh** — currently tokens are non-expiring; if GitHub App expiration is enabled, add a refresh flow

@@ -208,37 +208,66 @@ type appInfoResponse struct {
 	Slug string `json:"slug"`
 }
 
-// GetAppName returns the GitHub App name using a JWT for the given appID and key.
-// Used by the auth status command when authenticated as a GitHub App.
-func GetAppName(ctx context.Context, appID int64, key *rsa.PrivateKey) (string, error) {
+// AppInfo holds the GitHub App's display name and URL-safe slug.
+type AppInfo struct {
+	Name string
+	Slug string
+}
+
+// GetAppInfo returns the GitHub App's name and slug using a JWT for authentication.
+func GetAppInfo(ctx context.Context, appID int64, key *rsa.PrivateKey) (*AppInfo, error) {
 	jwtToken, err := GenerateJWT(appID, key)
 	if err != nil {
-		return "", fmt.Errorf("GenerateJWT: %w", err)
+		return nil, fmt.Errorf("GenerateJWT: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.github.com/app", nil)
 	if err != nil {
-		return "", fmt.Errorf("http.NewRequest: %w", err)
+		return nil, fmt.Errorf("http.NewRequest: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+jwtToken)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("http.DefaultClient.Do: %w", err)
+		return nil, fmt.Errorf("http.DefaultClient.Do: %w", err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // best-effort close on HTTP response body
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("app info request returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("app info request returned status %d", resp.StatusCode)
 	}
 
-	var info appInfoResponse
-	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return "", fmt.Errorf("json.NewDecoder.Decode: %w", err)
+	var raw appInfoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("json.NewDecoder.Decode: %w", err)
 	}
 
+	return &AppInfo{Name: raw.Name, Slug: raw.Slug}, nil
+}
+
+// GetAppName returns the GitHub App name using a JWT for the given appID and key.
+// Used by the auth status command when authenticated as a GitHub App.
+func GetAppName(ctx context.Context, appID int64, key *rsa.PrivateKey) (string, error) {
+	info, err := GetAppInfo(ctx, appID, key)
+	if err != nil {
+		return "", err
+	}
 	return info.Name, nil
+}
+
+// ResolveInstallationID returns the numeric installation ID for cfg.
+// If InstallationID is already set, returns it directly.
+// Otherwise generates a JWT and calls the GitHub API to find the first installation.
+func ResolveInstallationID(cfg *AppConfig) (int64, error) {
+	if cfg.InstallationID != 0 {
+		return cfg.InstallationID, nil
+	}
+	jwtToken, err := GenerateJWT(cfg.AppID, cfg.PrivateKey)
+	if err != nil {
+		return 0, fmt.Errorf("GenerateJWT: %w", err)
+	}
+	return findInstallation(jwtToken)
 }
 
 // findInstallation returns the first installation ID for the app
