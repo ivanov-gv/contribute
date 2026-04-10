@@ -32,7 +32,7 @@ gh contribute review 3929204495
 gh contribute thread 2935138407
 ```
 
-All commands auto-detect the repository (from git remote) and PR number (from current branch). Run `gh contribute auth login` once to authenticate.
+All commands auto-detect the repository (from git remote) and PR number (from current branch). Authentication uses a GitHub App — set `GH_CONTRIBUTE_APP_ID` and `GH_CONTRIBUTE_PRIVATE_KEY_PATH` to authenticate automatically on startup.
 
 ---
 
@@ -302,46 +302,59 @@ Then either:
 
 ### Authentication
 
-gh-contribute uses its own GitHub App and issues tokens via the **Device Authorization Flow** (RFC 8628). API calls appear as `myapp[bot] on behalf of <username>`, giving them proper attribution without exposing your personal token.
+gh-contribute authenticates as a **GitHub App**. API calls appear as `yourapp[bot]`, giving them proper attribution. The app must be installed on the target repository.
 
-#### First-time login
+#### Automatic login via environment variables
+
+Set these variables before running any command — gh-contribute authenticates automatically on startup:
 
 ```bash
-gh contribute auth login
+export GH_CONTRIBUTE_APP_ID=123456
+export GH_CONTRIBUTE_PRIVATE_KEY_PATH=/path/to/private-key.pem
+# optional: export GH_CONTRIBUTE_INSTALLATION_ID=<id>  # auto-detected if unset
 ```
 
-This prints a URL and a short code, then waits:
+If neither env vars nor stored credentials are present, gh-contribute exits with a non-zero code and prompts you to authenticate:
 
 ```
-Open: https://github.com/login/device
-Enter code: XXXX-YYYY
+Error: not authenticated — set GH_CONTRIBUTE_APP_ID and GH_CONTRIBUTE_PRIVATE_KEY_PATH, or run 'gh contribute login'
 ```
 
-Open the URL in your browser, enter the code, and authorize the app. The token is stored at `~/.config/gh-contribute/token` with `0600` permissions and reused for all future sessions.
+#### Persisting credentials with gh contribute login
+
+To store credentials in `~/.config/gh-contribute/app.json` instead of setting env vars every time:
+
+```bash
+gh contribute login --app-id 123456 --key-path /path/to/private-key.pem
+# GH_CONTRIBUTE_APP_ID is read from env if --app-id is omitted
+GH_CONTRIBUTE_APP_ID=123456 gh contribute login --key-path /path/to/private-key.pem
+```
+
+Stored credentials are used when env vars are not set. Env vars always take priority.
 
 #### Check status
 
 ```bash
 gh contribute auth status
-# Logged in as: your-username
+# logged in as app: MyApp (app_id=123456)
 ```
 
 #### CI and non-interactive environments
 
-Device Flow requires a browser. In CI, set the `GH_CONTRIBUTE_TOKEN` environment variable instead:
+In CI, set credentials via env vars (shown above) or use a pre-issued token directly:
 
 ```bash
 export GH_CONTRIBUTE_TOKEN=github_pat_...
 ```
 
-When set, the env var takes priority over the stored token file. No login step needed.
+`GH_CONTRIBUTE_TOKEN` takes the highest priority — no app credentials needed when it is set.
 
 #### Token lifecycle
 
-Tokens are non-expiring by default (GitHub App expiration is disabled). If a token is revoked or a request returns `401`, gh-contribute exits with:
+Installation tokens expire after 1 hour. gh-contribute automatically refreshes them via the `TokenProvider` — no manual intervention needed. If credentials become invalid, gh-contribute exits with:
 
 ```
-Error: token invalid or expired — run 'gh contribute auth login' to reauthenticate
+Error: token invalid or expired — run 'gh contribute login' to reauthenticate
 ```
 
 ## Auto-detection
@@ -365,12 +378,16 @@ This means in most cases you just run `gh contribute comments` with zero flags a
 gh-contribute/
 ├── cmd/gh-contribute/main.go           # entry point
 ├── internal/
-│   ├── auth/                           # Device Authorization Flow (RFC 8628)
-│   │   ├── auth.go                     # RunDeviceFlow, GetUsername (via go-github SDK)
-│   │   └── errors.go                   # ErrTokenInvalid sentinel
+│   ├── client/
+│   │   ├── auth/                       # GitHub App authentication
+│   │   │   ├── app.go                  # JWT generation, installation token exchange, LoadAppConfig
+│   │   │   ├── provider.go             # TokenProvider — thread-safe automatic token refresh
+│   │   │   └── errors.go               # ErrTokenInvalid sentinel
+│   │   ├── git/git.go                  # git helpers (current branch, remote URL)
+│   │   └── github/graphql.go           # GraphQL client (queries)
 │   ├── cmd/                            # cobra command definitions
 │   │   ├── root.go                     # root command, dependency wiring, PersistentPreRunE
-│   │   ├── auth.go                     # auth login / auth status commands
+│   │   ├── auth.go                     # login (top-level) / auth status commands
 │   │   ├── pr.go                       # pr command + PR auto-detection
 │   │   ├── comments.go                 # comments command
 │   │   ├── comment.go                  # comment command (post)
@@ -378,25 +395,17 @@ gh-contribute/
 │   │   ├── review.go                   # review command (inline comment detail)
 │   │   └── thread.go                   # thread command (full thread across reviews)
 │   ├── config/
-│   │   ├── config.go                   # repo detection from git remote
-│   │   └── token.go                    # LoadToken / SaveToken, GH_CONTRIBUTE_TOKEN env, ErrNotAuthenticated
-│   ├── format/format.go                # shared formatting utilities (reactions, dates, authors)
-│   ├── github/graphql.go               # GraphQL client (queries)
-│   ├── git/git.go                      # git helpers (current branch)
+│   │   ├── config.go                   # Config struct, Load(), repo detection from git remote
+│   │   ├── app.go                      # LoadAppConfig(), SaveAppCredentials(), stored app.json
+│   │   ├── token.go                    # loadTokenWithProvider(), GH_CONTRIBUTE_TOKEN env priority
+│   │   └── errors.go                   # ErrNotAuthenticated sentinel
 │   └── service/
-│       ├── pr/
-│       │   ├── pr.go                   # PR info and lookup via GraphQL
-│       │   └── format.go               # PR markdown formatting
-│       ├── comment/
-│       │   ├── comment.go              # list via GraphQL, post via REST
-│       │   └── format.go               # comment/review markdown formatting
-│       ├── reaction/reaction.go        # add reactions via REST
-│       ├── review/
-│       │   ├── review.go               # review detail — only this review's comments, grouped by thread
-│       │   └── format.go               # review detail markdown formatting
-│       └── thread/
-│           ├── thread.go               # full thread across all reviews via GraphQL
-│           └── format.go               # thread markdown formatting
+│       ├── pr/                         # PR info and formatting
+│       ├── comment/                    # list via GraphQL, post via REST
+│       ├── reaction/                   # add reactions via REST
+│       ├── review/                     # review detail — inline comments grouped by thread
+│       ├── thread/                     # full thread across all reviews via GraphQL
+│       └── issue/                      # issue info and formatting
 ├── .claude/
 │   ├── hooks/session-start.sh          # SessionStart hook: build + auth check
 │   └── settings.json                   # Claude Code hook registration
@@ -405,7 +414,7 @@ gh-contribute/
 ```
 
 Built with:
-- [google/go-github](https://github.com/google/go-github) — GitHub REST API client (mutations + `GetUsername`)
+- [google/go-github](https://github.com/google/go-github) — GitHub REST API client (mutations)
 - GitHub GraphQL API v4 — for rich read queries (reactions, review threads, metadata)
 - [spf13/cobra](https://github.com/spf13/cobra) — CLI framework
 - [joho/godotenv](https://github.com/joho/godotenv) — `.env` file loading
@@ -417,7 +426,7 @@ The `.claude/hooks/session-start.sh` hook runs automatically at the start of eve
 
 1. Runs `go mod download` to warm the module cache
 2. Builds the extension binary
-3. Checks `auth status` — if no token is found, starts `auth login` so you can authorize before the agent begins work
+3. Checks `auth status` — if `GH_CONTRIBUTE_APP_ID` and `GH_CONTRIBUTE_PRIVATE_KEY_PATH` are set, authentication is already active; otherwise the session exits with a clear error
 
 This ensures the agent always has valid GitHub credentials before it needs them, preventing mid-task authentication interruptions.
 
