@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ivanov-gv/gh-contribute/internal/client/auth"
+	"github.com/ivanov-gv/gh-contribute/internal/client/git"
 	"github.com/ivanov-gv/gh-contribute/internal/config"
 )
 
@@ -81,6 +82,14 @@ Example:
 
 			if err := config.SaveAppCredentials(appID, keyPath, installationID); err != nil {
 				return fmt.Errorf(logfmt+"config.SaveAppCredentials: %w", err)
+			}
+
+			// configure git to use gh-contribute as the credential helper for github.com,
+			// so that 'git push' works automatically without extra auth steps
+			if err := git.SetupCredentialHelper("gh-contribute git-credentials"); err != nil {
+				log.Warn().Err(err).Msg(logfmt + "git credential helper setup failed — git push may require manual auth")
+			} else {
+				log.Info().Msg(logfmt + "git credential helper configured for github.com")
 			}
 
 			log.Info().

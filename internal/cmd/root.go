@@ -91,6 +91,8 @@ func Execute() {
 		newLoginCmd(),
 		// auth subcommand (status) overrides PersistentPreRunE with a no-op
 		newAuthCmd(),
+		// git-credentials is a hidden command implementing the git credential helper protocol
+		newGitCredentialsCmd(),
 		// authenticated commands — app is initialized via PersistentPreRunE
 		_app.newPRCmd(),
 		_app.newCommentsCmd(),

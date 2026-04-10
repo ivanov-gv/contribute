@@ -37,6 +37,24 @@ func loadTokenWithProvider() (*auth.TokenProvider, string, error) {
 	return nil, "", ErrNotAuthenticated
 }
 
+// LoadToken returns the active GitHub token using the priority chain.
+// Returns ErrNotAuthenticated when no credentials are configured.
+func LoadToken() (string, error) {
+	provider, token, err := loadTokenWithProvider()
+	if err != nil {
+		return "", fmt.Errorf("loadTokenWithProvider: %w", err)
+	}
+	if provider != nil {
+		// provider handles automatic refresh
+		t, refreshErr := provider.Token()
+		if refreshErr != nil {
+			return "", fmt.Errorf("provider.Token: %w", refreshErr)
+		}
+		return t, nil
+	}
+	return token, nil
+}
+
 // tryAppAuth attempts GitHub App authentication if credentials are configured.
 // Returns (nil, "", nil) if app auth is not configured.
 // On success, returns a TokenProvider that caches and refreshes the token automatically,

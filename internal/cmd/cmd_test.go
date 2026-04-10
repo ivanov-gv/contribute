@@ -107,6 +107,29 @@ func TestCommandWiring(t *testing.T) {
 	}
 }
 
+func TestGitCredentialsCmd_IsHidden(t *testing.T) {
+	cmd := newGitCredentialsCmd()
+	assert.True(t, cmd.Hidden)
+}
+
+func TestGitCredentialsCmd_NonGetOperationsAreNoop(t *testing.T) {
+	for _, op := range []string{"store", "erase"} {
+		t.Run(op, func(t *testing.T) {
+			cmd := newGitCredentialsCmd()
+			cmd.SetArgs([]string{op})
+			err := cmd.Execute()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestGitCredentialsCmd_NoArgsIsNoop(t *testing.T) {
+	cmd := newGitCredentialsCmd()
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+	assert.NoError(t, err)
+}
+
 func TestReactCmd_HasTypeFlag(t *testing.T) {
 	a := &app{}
 	cmd := a.newReactCmd()
