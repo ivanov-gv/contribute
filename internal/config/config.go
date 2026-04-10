@@ -3,7 +3,6 @@ package config
 import (
 	"context"
 	"fmt"
-	"os"
 	"os/exec"
 	"strings"
 
@@ -32,16 +31,10 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("loadTokenWithProvider: %w", err)
 	}
 
-	// detect owner/repo: env vars take priority over git remote detection
+	// detect owner/repo from git remote
 	owner, repo, err := detectRepo()
 	if err != nil {
 		return nil, fmt.Errorf("detectRepo: %w", err)
-	}
-	if v := os.Getenv("GH_CONTRIBUTE_OWNER"); v != "" {
-		owner = v
-	}
-	if v := os.Getenv("GH_CONTRIBUTE_REPO"); v != "" {
-		repo = v
 	}
 
 	return &Config{

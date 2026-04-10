@@ -3,7 +3,7 @@
 // Package integration contains integration tests for gh-contribute services.
 //
 // Suite (this file) runs against the real GitHub API (GH_CONTRIBUTE_TOKEN required).
-// It targets the stable, locked PR #1 in ivanov-gv/gh-contribute and compares
+// It targets the stable, locked PR #1 in ivanov-gv/contribute and compares
 // service Format() output against the shared expected files in
 // test/ivanov-gv.gh-contribute.pr#1/ — the same files used by the E2E binary tests.
 //
@@ -32,13 +32,13 @@ import (
 
 const (
 	realOwner   = "ivanov-gv"
-	realRepo    = "gh-contribute"
+	realRepo    = "contribute"
 	realPR      = 1
-	testDataDir = "../ivanov-gv.gh-contribute.pr#1"
+	testDataDir = "../ivanov-gv.contribute.pr#1"
 )
 
 // Suite runs against the real GitHub API using GH_CONTRIBUTE_TOKEN.
-// Target: ivanov-gv/gh-contribute PR #1 (stable, locked, known expected output).
+// Target: ivanov-gv/contribute PR #1 (stable, locked, known expected output).
 // All test methods compare service Format() output to expected .md files.
 type Suite struct {
 	suite.Suite
