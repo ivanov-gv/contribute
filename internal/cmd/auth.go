@@ -70,9 +70,9 @@ Example:
 				return fmt.Errorf(logfmt+"auth.LoadAppConfigFromPath: %w", err)
 			}
 
-			appName, err := auth.GetAppName(context.Background(), appCfg.AppID, appCfg.PrivateKey)
+			appInfo, err := auth.GetAppInfo(context.Background(), appCfg.AppID, appCfg.PrivateKey)
 			if err != nil {
-				return fmt.Errorf(logfmt+"auth.GetAppName: %w", err)
+				return fmt.Errorf(logfmt+"auth.GetAppInfo: %w", err)
 			}
 
 			_, _, err = auth.GetAppToken(appCfg)
@@ -92,8 +92,22 @@ Example:
 				log.Info().Msg(logfmt + "git credential helper configured for github.com")
 			}
 
+			// configure git identity so commits are attributed to the app's bot account
+			resolvedInstallationID, err := auth.ResolveInstallationID(appCfg)
+			if err != nil {
+				log.Warn().Err(err).Msg(logfmt + "failed to resolve installation ID — git identity not configured")
+			} else {
+				botUsername := appInfo.Slug + "[bot]"
+				botEmail := fmt.Sprintf("%d+%s@users.noreply.github.com", resolvedInstallationID, botUsername)
+				if err := git.SetupGitIdentity(botUsername, botEmail); err != nil {
+					log.Warn().Err(err).Msg(logfmt + "git identity setup failed — set user.name and user.email manually")
+				} else {
+					log.Info().Str("user.name", botUsername).Str("user.email", botEmail).Msg(logfmt + "git identity configured")
+				}
+			}
+
 			log.Info().
-				Str("app", appName).
+				Str("app", appInfo.Name).
 				Int64("app_id", appID).
 				Msg(logfmt + "authenticated successfully")
 			return nil

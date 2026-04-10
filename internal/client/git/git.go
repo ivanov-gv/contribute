@@ -16,6 +16,17 @@ func CurrentBranch() (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+// SetupGitIdentity sets the global git user.name and user.email.
+func SetupGitIdentity(username, email string) error {
+	if out, err := exec.CommandContext(context.Background(), "git", "config", "--global", "user.name", username).CombinedOutput(); err != nil { //nolint:gosec // username is derived from GitHub App slug, not user input
+		return fmt.Errorf("git config user.name: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	if out, err := exec.CommandContext(context.Background(), "git", "config", "--global", "user.email", email).CombinedOutput(); err != nil { //nolint:gosec // email is derived from GitHub App slug + installation ID, not user input
+		return fmt.Errorf("git config user.email: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // SetupCredentialHelper configures git (globally) to use the given shell command as a
 // credential helper for GitHub HTTPS authentication. Scoped to github.com only so it
 // does not interfere with other credential helpers on the system.
