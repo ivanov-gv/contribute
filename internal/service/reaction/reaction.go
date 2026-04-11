@@ -88,8 +88,9 @@ type addReactionMutation struct {
 	} `graphql:"addReaction(input: $input)"`
 }
 
-// addReactionInput is the input for the addReaction GraphQL mutation
-type addReactionInput struct {
+// AddReactionInput is the input for the addReaction GraphQL mutation.
+// Must be PascalCase to match the GitHub GraphQL schema type name.
+type AddReactionInput struct {
 	SubjectID githubv4.ID              `json:"subjectId"`
 	Content   githubv4.ReactionContent `json:"content"`
 }
@@ -107,7 +108,7 @@ func (s *Service) AddToReview(prNumber int, reviewID int64, reaction string) err
 		return fmt.Errorf("findReviewNodeID [pr=%d, review=%d]: %w", prNumber, reviewID, err)
 	}
 
-	input := addReactionInput{
+	input := AddReactionInput{
 		SubjectID: nodeID,
 		Content:   toGraphQLContent(reaction),
 	}
