@@ -22,8 +22,13 @@ contribute comments
 contribute comment "Fixed the issue, please re-review"
 
 # react to a comment
-contribute react 123456789 eyes --type issue
-contribute react 987654321 rocket --type review
+contribute react comment 123456789 eyes 
+
+# react to a review
+contribute react review 12343424 eyes
+
+# react to an issue/PR top-level comment
+contribute react issue-comment 12343424 eyes
 
 # show inline comments for a specific review
 contribute review 3929204495
