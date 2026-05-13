@@ -1,7 +1,3 @@
-It's mostly a test project to try Claude Code. Completely vibecoded. Use with caution.
-
----
-
 # contribute
 
 A CLI tool that lets AI agents interact with pull requests as real contributors — reading reviews, posting comments, and leaving reactions.
